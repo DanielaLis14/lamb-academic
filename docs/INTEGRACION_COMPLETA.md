@@ -102,8 +102,6 @@ LAMB_API_URL=http://localhost:8091 LAMB_KEYCLOAK_URL=http://localhost:48090 pyth
 
 - Migración V5 de expedientes: el código está listo (sección 10). Falta probarla contra Oracle en la base aislada
   (huella, V5, rollback, huella, V5) y aplicarla en desarrollo, solo con autorización.
-- Expedientes: en el formulario, cálculo en vivo del tamaño total y de «requisitos X de Y», y preselección del
-  requisito que falta.
 - Registro de resultados de curso por el docente (hoy lo hace coordinación).
 
 ## 8. Pulido visual y carga de archivos
@@ -217,9 +215,14 @@ LAMB_API_URL=http://localhost:8091 LAMB_KEYCLOAK_URL=http://localhost:48090 pyth
 **Frontend.**
 - **Formulario.**
   - Selectores de categoría y tipo de solicitud. El destinatario se propone con el sugerido y se puede cambiar.
-  - Se muestran los documentos obligatorios y los recomendados.
   - Cada documento lleva su tipo institucional y, a elección, un archivo o un enlace.
   - Ya no hay campo de código de trámite.
+  - Debajo de las líneas, un resumen que se recalcula en vivo al cambiar las líneas o el tipo:
+    - cantidad de documentos;
+    - tamaño total frente a 25 MB, con barra (los enlaces no suman);
+    - «Requisitos cumplidos: X de Y», con la lista de obligatorios y, aparte, los recomendados.
+  - El formulario no se envía si faltan obligatorios o se supera el total; el backend vuelve a validar.
+  - Al agregar una línea se preselecciona el primer requisito obligatorio que falta.
 - **Detalle.**
   - Muestra la categoría, el tipo y el destinatario.
   - Cada documento muestra su tipo y, si es un enlace, un botón «Abrir en SharePoint».
@@ -233,7 +236,7 @@ así que se pueden repetir sin chocar con la regla de duplicado.
 | Prueba | Resultado |
 |---|---|
 | Backend (`mvnw test`, sin las clases que usan Oracle) | 166/166 (antes 130) |
-| Frontend (`ng test`) | 188/188 (antes 185) |
+| Frontend (`ng test`) | 193/193 (antes 185), con el resumen en vivo del formulario |
 | `ng build` | correcto |
 | V5 en una base local nueva (V1–V4 y V3), con dos expedientes en formato anterior (uno `TR-2026-00007`) | aplicada; los registros previos no cambian y la secuencia empieza en 8 |
 | Verificación de V5: tildes, 23 requisitos, restricciones de origen (6 casos) y un expediente en curso por tipo (3 casos) | correcta |

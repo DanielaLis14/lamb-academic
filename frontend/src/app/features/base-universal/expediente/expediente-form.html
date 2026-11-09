@@ -78,24 +78,6 @@
         }
       </div>
 
-      @if (tipoElegido(); as tipo) {
-        <div aria-label="Documentos del tipo de solicitud">
-          <h2>Documentos para {{ tipo.nombre }}</h2>
-          @if (tipo.requisitos.length) {
-            <ul class="lista-motivos">
-              @for (r of tipo.requisitos; track r.tipoDocumentoInstitucionalId) {
-                <li>
-                  {{ r.nombre }}
-                  <span class="etiqueta-estado" [class.estado-alerta]="r.obligatorio" [class.estado-neutro]="!r.obligatorio">{{ r.obligatorio ? 'Obligatorio' : 'Recomendado' }}</span>
-                </li>
-              }
-            </ul>
-          } @else {
-            <p class="texto-secundario texto-pequeno">Este tipo no pide documentos específicos.</p>
-          }
-        </div>
-      }
-
       <h2>Documentos</h2>
       <p class="texto-secundario texto-pequeno">
         Por cada documento, sube un archivo PDF, PNG o JPG (hasta 5 MB cada uno y 25 MB por expediente) o pega el enlace
@@ -185,8 +167,82 @@
           <svg lucidePlus aria-hidden="true"></svg>
           Agregar documento
         </button>
-        <span class="texto-secundario texto-pequeno">{{ documentos.length }} de {{ maxDocumentos }} documentos</span>
       </div>
+
+      @let r = resumen();
+      <section class="resumen-expediente" aria-label="Resumen del expediente" aria-live="polite">
+        <div class="resumen-cifras">
+          <p class="resumen-documentos">
+            <strong>{{ r.documentos }}</strong> de {{ maxDocumentos }} documentos
+          </p>
+          <div class="progreso">
+            <span class="texto-pequeno">
+              Tamaño total: <strong>{{ tamanoTotal(r.tamano) }}</strong> de {{ tamanoLegible(r.maximo) }}
+            </span>
+            <span
+              class="barra"
+              [class.barra-excedida]="r.excedido"
+              role="progressbar"
+              aria-label="Tamaño total de los archivos"
+              [attr.aria-valuenow]="r.porcentaje"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              ><span [style.width.%]="r.porcentaje"></span
+            ></span>
+            <span class="texto-pequeno texto-secundario">Los documentos con enlace de SharePoint no suman tamaño.</span>
+          </div>
+        </div>
+
+        @if (tipoElegido(); as tipo) {
+          <div class="resumen-requisitos">
+            <p class="resumen-requisitos-titulo">
+              Requisitos cumplidos: <strong>{{ r.cumplidos }} de {{ r.obligatorios.length }}</strong>
+              <span class="texto-secundario texto-pequeno">· {{ tipo.nombre }}</span>
+            </p>
+            @if (r.obligatorios.length) {
+              <ul class="lista-requisitos" aria-label="Documentos obligatorios">
+                @for (o of r.obligatorios; track o.requisito.tipoDocumentoInstitucionalId) {
+                  <li>
+                    <span class="etiqueta-estado" [class.estado-activo]="o.cumplido" [class.estado-alerta]="!o.cumplido">
+                      {{ o.cumplido ? 'Cumplido' : 'Falta' }}
+                    </span>
+                    {{ o.requisito.nombre }}
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="texto-secundario texto-pequeno">Este tipo no exige documentos específicos.</p>
+            }
+            @if (r.recomendados.length) {
+              <p class="texto-pequeno texto-secundario resumen-recomendados-titulo">Recomendados (no se exigen)</p>
+              <ul class="lista-requisitos" aria-label="Documentos recomendados">
+                @for (o of r.recomendados; track o.requisito.tipoDocumentoInstitucionalId) {
+                  <li>
+                    <span class="etiqueta-estado" [class.estado-activo]="o.cumplido" [class.estado-neutro]="!o.cumplido">
+                      {{ o.cumplido ? 'Incluido' : 'Opcional' }}
+                    </span>
+                    {{ o.requisito.nombre }}
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        } @else {
+          <p class="texto-secundario texto-pequeno">Elige el tipo de solicitud para ver sus requisitos.</p>
+        }
+
+        @if (documentos.touched && documentos.hasError('requisitos')) {
+          <p class="mensaje mensaje-error" role="alert">
+            Faltan documentos obligatorios: {{ r.faltantes.map(nombreRequisito).join(', ') }}.
+          </p>
+        }
+        @if (documentos.hasError('tamanoTotal')) {
+          <p class="mensaje mensaje-error" role="alert">
+            Los archivos suman {{ tamanoLegible(r.tamano) }} y el máximo es {{ tamanoLegible(r.maximo) }} por expediente.
+            Quita algún archivo o usa un enlace de SharePoint.
+          </p>
+        }
+      </section>
     </div>
     <footer class="acciones">
       <button type="submit" class="boton boton-primario" [disabled]="guardando()">

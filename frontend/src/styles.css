@@ -912,3 +912,59 @@ input[type='file']::file-selector-button:hover {
   gap: 0.375rem;
   font-weight: 400;
 }
+
+/* Resumen en vivo del expediente: documentos, tamano total y requisitos */
+.resumen-expediente {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  border: var(--lamb-borde);
+  border-radius: var(--lamb-radio);
+  background: var(--lamb-gris-50);
+}
+
+.resumen-cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  align-items: flex-start;
+}
+
+.resumen-cifras .progreso {
+  flex: 1 1 16rem;
+}
+
+.resumen-documentos,
+.resumen-requisitos-titulo {
+  margin: 0;
+}
+
+.progreso .barra.barra-excedida > span {
+  background: var(--lamb-error-700);
+}
+
+.lista-requisitos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lista-requisitos li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lista-requisitos .etiqueta-estado {
+  min-width: 5.5rem;
+  justify-content: center;
+}
+
+.resumen-recomendados-titulo {
+  margin: 0.75rem 0 0;
+}

@@ -1,6 +1,16 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
-import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
+import {
+  AbstractControl,
+  FormArray,
+  FormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
+import { map } from 'rxjs';
 import { Router, RouterLink } from '@angular/router';
 import { LucidePlus, LucideTrash } from '@lucide/angular';
 import { AuthService } from '../../../core/auth/auth-service';
@@ -11,8 +21,9 @@ import { alMenosUnaLinea } from '../../../shared/validadores';
 import { Persona } from '../persona/persona.model';
 import { PersonaService } from '../persona/persona-service';
 import { OrigenDocumento, problemaArchivo, problemaEnlace, tamanoLegible } from './documento-form';
-import { ACEPTA_ARCHIVO, Catalogo, MAX_DOCUMENTOS, TipoSolicitud } from './expediente.model';
+import { ACEPTA_ARCHIVO, Catalogo, MAX_DOCUMENTOS, Requisito, TipoSolicitud } from './expediente.model';
 import { ExpedienteService } from './expediente-service';
+import { LineaResumen, resumirExpediente } from './resumen-expediente';
 
 /** Cada linea tiene un archivo valido o un enlace institucional, segun su origen. */
 function contenidoValido(linea: AbstractControl): ValidationErrors | null {
@@ -65,14 +76,30 @@ export class ExpedienteForm {
   protected readonly error = signal<string | null>(null);
   protected readonly guardando = signal(false);
 
+  /** Las lineas son invalidas si faltan obligatorios del tipo elegido o los archivos superan 25 MB. */
+  private readonly requisitosYTamano: ValidatorFn = (control) => {
+    const resumen = resumirExpediente((control as FormArray).getRawValue() as LineaResumen[], this.tipoElegido());
+    const errores: ValidationErrors = {};
+    if (resumen.excedido) errores['tamanoTotal'] = resumen.tamano;
+    if (resumen.faltantes.length) errores['requisitos'] = resumen.faltantes.map((r) => r.nombre);
+    return Object.keys(errores).length ? errores : null;
+  };
+
   protected readonly form = this.fb.group({
     asunto: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(255)]),
     personaId: this.fb.control<number | null>(null),
     categoriaId: this.fb.control<number | null>(null, Validators.required),
     tipoSolicitudId: this.fb.control<number | null>(null, Validators.required),
     destinatarioId: this.fb.control<number | null>(null, Validators.required),
-    documentos: this.fb.array([this.linea()], [alMenosUnaLinea, archivosDistintos]),
+    documentos: this.fb.array([this.linea()], [alMenosUnaLinea, archivosDistintos, this.requisitosYTamano]),
   });
+
+  /** Valor de las lineas como senal: el resumen se recalcula con cada cambio de linea o de tipo. */
+  private readonly lineas = toSignal(
+    this.form.controls.documentos.valueChanges.pipe(map(() => this.form.controls.documentos.getRawValue())),
+    { initialValue: this.form.controls.documentos.getRawValue() },
+  );
+  protected readonly resumen = computed(() => resumirExpediente(this.lineas() as LineaResumen[], this.tipoElegido()));
 
   constructor() {
     this.expedienteService.categorias().subscribe({
@@ -130,10 +157,24 @@ export class ExpedienteForm {
     const tipo = this.tipos().find((t) => t.id === id) ?? null;
     this.tipoElegido.set(tipo);
     this.form.controls.destinatarioId.setValue(tipo?.destinatarioSugerido?.id ?? null);
+    // Los requisitos dependen del tipo: las lineas se vuelven a validar.
+    this.documentos.updateValueAndValidity();
   }
 
+  /** La linea nueva viene con el primer requisito obligatorio que aun falta. */
   agregarLinea(): void {
-    if (this.documentos.length < MAX_DOCUMENTOS) this.documentos.push(this.linea());
+    if (this.documentos.length >= MAX_DOCUMENTOS) return;
+    const linea = this.linea();
+    const faltante = this.resumen().faltantes[0];
+    if (faltante) linea.controls.tipoDocumentoInstitucionalId.setValue(faltante.tipoDocumentoInstitucionalId);
+    this.documentos.push(linea);
+  }
+
+  protected readonly nombreRequisito = (r: Requisito) => r.nombre;
+
+  /** Tamano legible, con 0 cuando aun no hay archivos. */
+  protected tamanoTotal(bytes: number): string {
+    return bytes === 0 ? '0 KB' : tamanoLegible(bytes);
   }
 
   quitarLinea(indice: number): void {

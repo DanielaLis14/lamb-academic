@@ -6,6 +6,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { cerrarSesionDePrueba, iniciarSesionDePrueba } from '../../testing/sesion-prueba';
 import { archivosSinRepetir, grupoDocumento, problemaEnlace } from './base-universal/expediente/documento-form';
 import { ExpedienteForm } from './base-universal/expediente/expediente-form';
+import { resumirExpediente } from './base-universal/expediente/resumen-expediente';
 import { periodoPorDefecto } from './core-academico/docente/carga-docente';
 import { CargoDetalle } from './finanzas/cargo/cargo-detalle';
 import { Periodo } from './matricula/periodo/periodo.model';
@@ -108,17 +109,90 @@ describe('ExpedienteForm: registro transaccional', () => {
     (fixture.componentInstance as ExpedienteForm).elegirArchivo(linea, { target: { files: [archivo] } } as unknown as Event);
   }
 
-  it('sin codigo de tramite: muestra los requisitos y propone el destinatario sugerido', async () => {
+  it('sin codigo de tramite: propone el destinatario sugerido y el resumen se recalcula en vivo', async () => {
     const fixture = await crear(['ESTUDIANTE']);
     const html = fixture.nativeElement as HTMLElement;
     expect(html.querySelector('#codigoTramite')).toBeNull();
+    expect(html.textContent).toContain('Elige el tipo de solicitud para ver sus requisitos.');
     await clasificar(fixture);
-    expect(html.textContent).toContain('Documentos para Examen rezagado');
-    expect(html.textContent).toContain('Obligatorio');
-    expect(html.textContent).toContain('Recomendado');
     expect((html.querySelector('#destinatarioId') as HTMLSelectElement).selectedOptions[0].textContent).toContain(
       'Coordinación Académica',
     );
+    const resumen = () => html.querySelector('.resumen-expediente')!.textContent!.replace(/\s+/g, ' ');
+    expect(resumen()).toContain('1 de 20 documentos');
+    expect(resumen()).toContain('Tamaño total: 0 KB de 25.0 MB');
+    expect(resumen()).toContain('Requisitos cumplidos: 0 de 1');
+    expect(resumen()).toContain('Falta FUT');
+    expect(resumen()).toContain('Recomendados (no se exigen)');
+    expect(resumen()).toContain('Opcional Certificado médico');
+
+    llenar(html, { 'doc-tipo-0': '1: 100' });
+    elegir(fixture, new File([new Uint8Array(2 * 1024 * 1024)], 'fut.pdf', { type: 'application/pdf' }));
+    await fixture.whenStable();
+    expect(resumen()).toContain('Requisitos cumplidos: 1 de 1');
+    expect(resumen()).toContain('Cumplido FUT');
+    expect(resumen()).toContain('Tamaño total: 2.0 MB de 25.0 MB');
+    expect(html.querySelector('.resumen-expediente [role=progressbar]')!.getAttribute('aria-valuenow')).toBe('8');
+
+    // Una linea con enlace suma un documento pero no tamano.
+    const form = fixture.componentInstance as ExpedienteForm;
+    form.agregarLinea();
+    await fixture.whenStable();
+    html.querySelector<HTMLInputElement>('#doc-origen-enlace-1')!.click();
+    await fixture.whenStable();
+    llenar(html, { 'doc-tipo-1': '2: 102', 'doc-enlace-1': 'https://upeuedupe.sharepoint.com/:b:/s/x/Ea1' });
+    await fixture.whenStable();
+    expect(resumen()).toContain('2 de 20 documentos');
+    expect(resumen()).toContain('Tamaño total: 2.0 MB de 25.0 MB');
+    expect(resumen()).toContain('Incluido Certificado médico');
+  });
+
+  it('al agregar una linea preselecciona el primer requisito obligatorio que falta', async () => {
+    const fixture = await crear(['ESTUDIANTE']);
+    const html = fixture.nativeElement as HTMLElement;
+    await clasificar(fixture);
+    const form = fixture.componentInstance as ExpedienteForm;
+    form.agregarLinea();
+    await fixture.whenStable();
+    expect((html.querySelector('#doc-tipo-1') as HTMLSelectElement).selectedOptions[0].textContent).toContain('FUT');
+    // Con el FUT ya presente, la siguiente linea no se preselecciona.
+    form.agregarLinea();
+    await fixture.whenStable();
+    expect((html.querySelector('#doc-tipo-2') as HTMLSelectElement).selectedOptions[0].textContent).toContain('Tipo');
+  });
+
+  it('si faltan documentos obligatorios el formulario es invalido y no se envia', async () => {
+    const fixture = await crear(['ESTUDIANTE']);
+    const html = fixture.nativeElement as HTMLElement;
+    await clasificar(fixture);
+    llenar(html, { asunto: 'Examen', 'doc-nombre-0': 'Certificado', 'doc-tipo-0': '2: 102' });
+    elegir(fixture, new File(['%PDF-1.7'], 'cert.pdf', { type: 'application/pdf' }));
+    html.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+    await fixture.whenStable();
+    expect(html.textContent).toContain('Faltan documentos obligatorios: FUT.');
+    backend.expectNone((r) => r.method === 'POST');
+  });
+
+  it('si los archivos superan 25 MB en total el formulario es invalido y no se envia', async () => {
+    const fixture = await crear(['ESTUDIANTE']);
+    const html = fixture.nativeElement as HTMLElement;
+    const form = fixture.componentInstance as ExpedienteForm;
+    await clasificar(fixture);
+    llenar(html, { asunto: 'Examen' });
+    for (let i = 0; i < 6; i++) {
+      if (i > 0) form.agregarLinea();
+      await fixture.whenStable();
+      llenar(html, { [`doc-nombre-${i}`]: `Anexo ${i}`, [`doc-tipo-${i}`]: '1: 100' });
+      const archivo = new File(['%PDF-1.7'], `anexo${i}.pdf`, { type: 'application/pdf' });
+      Object.defineProperty(archivo, 'size', { value: 4.5 * 1024 * 1024 });
+      elegir(fixture, archivo, i);
+    }
+    await fixture.whenStable();
+    expect(html.querySelector('.resumen-expediente .barra')!.classList).toContain('barra-excedida');
+    html.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+    await fixture.whenStable();
+    expect(html.textContent).toContain('Los archivos suman 27.0 MB y el máximo es 25.0 MB por expediente.');
+    backend.expectNone((r) => r.method === 'POST');
   });
 
   it('el estudiante registra con archivo y enlace, sin titular: el backend usa la persona de su token', async () => {
@@ -191,15 +265,16 @@ describe('ExpedienteForm: registro transaccional', () => {
     backend.expectNone((r) => r.method === 'POST');
   });
 
-  it('si faltan requisitos (422), muestra los que faltan, informa que no se guardo nada y no navega', async () => {
+  it('si el backend rechaza por requisitos (422), muestra su mensaje y no navega', async () => {
     const fixture = await crear(['COORDINADOR']);
     backend.expectOne((r) => r.url === `${API}/personas`).flush([{ id: 501, nombreCompleto: 'Ana', numeroDocumento: '1' }]);
     await fixture.whenStable();
     const navegar = vi.spyOn(TestBed.inject(Router), 'navigate');
     const html = fixture.nativeElement as HTMLElement;
     await clasificar(fixture);
-    llenar(html, { personaId: '1: 501', asunto: 'Examen', 'doc-nombre-0': 'Certificado', 'doc-tipo-0': '2: 102' });
-    elegir(fixture, new File(['%PDF-1.7'], 'cert.pdf', { type: 'application/pdf' }));
+    // El catalogo del navegador puede estar desactualizado: el backend vuelve a validar y responde 422.
+    llenar(html, { personaId: '1: 501', asunto: 'Examen', 'doc-nombre-0': 'FUT', 'doc-tipo-0': '1: 100' });
+    elegir(fixture, new File(['%PDF-1.7'], 'fut.pdf', { type: 'application/pdf' }));
     html.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
     backend
       .expectOne((r) => r.method === 'POST' && r.url === `${API}/expedientes`)
@@ -210,6 +285,48 @@ describe('ExpedienteForm: registro transaccional', () => {
     await fixture.whenStable();
     expect(html.textContent).toContain('Faltan documentos obligatorios para Examen rezagado: FUT');
     expect(navegar).not.toHaveBeenCalled();
+  });
+});
+
+describe('Resumen del expediente (mismas reglas que el backend)', () => {
+  const MB = 1024 * 1024;
+  const tipo = {
+    id: 30, codigo: 'EXAMEN_REZAGADO', nombre: 'Examen rezagado', descripcion: null, categoriaId: 1,
+    destinatarioSugerido: null,
+    requisitos: [
+      { tipoDocumentoInstitucionalId: 100, codigo: 'FUT', nombre: 'FUT', obligatorio: true },
+      { tipoDocumentoInstitucionalId: 101, codigo: 'VOUCHER', nombre: 'Voucher de pago', obligatorio: true },
+      { tipoDocumentoInstitucionalId: 102, codigo: 'CERT_MEDICO', nombre: 'Certificado médico', obligatorio: false },
+    ],
+  };
+  const archivo = (megas: number) => ({ size: megas * MB }) as File;
+
+  it('suma solo los archivos, cuenta los obligatorios cumplidos y lista los que faltan', () => {
+    const r = resumirExpediente(
+      [
+        { origen: 'archivo', archivo: archivo(4), tipoDocumentoInstitucionalId: 100 },
+        { origen: 'enlace', archivo: archivo(9), tipoDocumentoInstitucionalId: 102 },
+        { origen: 'archivo', archivo: null, tipoDocumentoInstitucionalId: null },
+      ],
+      tipo,
+    );
+    expect(r.documentos).toBe(3);
+    expect(r.tamano).toBe(4 * MB);
+    expect(r.porcentaje).toBe(16);
+    expect(r.excedido).toBe(false);
+    expect(r.cumplidos).toBe(1);
+    expect(r.faltantes.map((f) => f.codigo)).toEqual(['VOUCHER']);
+    expect(r.recomendados.map((x) => [x.requisito.codigo, x.cumplido])).toEqual([['CERT_MEDICO', true]]);
+  });
+
+  it('marca excedido por encima de 25 MB y sin tipo no exige requisitos', () => {
+    const r = resumirExpediente(
+      [1, 2, 3, 4, 5, 6].map(() => ({ origen: 'archivo' as const, archivo: archivo(4.5), tipoDocumentoInstitucionalId: 100 })),
+      null,
+    );
+    expect(r.excedido).toBe(true);
+    expect(r.porcentaje).toBe(100);
+    expect(r.faltantes).toEqual([]);
   });
 });
 
