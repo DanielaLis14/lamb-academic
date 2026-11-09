@@ -235,4 +235,19 @@ así que se pueden repetir sin chocar con la regla de duplicado.
 | Backend (`mvnw test`, sin las clases que usan Oracle) | 166/166 (antes 130) |
 | Frontend (`ng test`) | 188/188 (antes 185) |
 | `ng build` | correcto |
-| V5 y su rollback contra Oracle (base aislada), pruebas de integración con Oracle y e2e | **pendiente**: esta computadora no tenía todavía la base aislada del proyecto integrado |
+| V5 en una base local nueva (V1–V4 y V3), con dos expedientes en formato anterior (uno `TR-2026-00007`) | aplicada; los registros previos no cambian y la secuencia empieza en 8 |
+| Verificación de V5: tildes, 23 requisitos, restricciones de origen (6 casos) y un expediente en curso por tipo (3 casos) | correcta |
+| Rollback de V5, también con un documento con enlace; huella de datos y estructura antes/después (`estructura_esquema.sql`) | idénticas (88 objetos); el documento con enlace se borra y el total se recalcula |
+| V5 aplicada otra vez | correcta |
+| Backend completo (`mvnw test`, con las 3 clases de Oracle y la validación del esquema de Hibernate) | 175/175 |
+| `matriz_accesos.py` / `verificar_docente.py` / `verificar_keycloak.py` | 22/22 (5 omitidos por falta de datos), 47/47, 8/8 |
+| `e2e_integracion.py` (dos ejecuciones seguidas) / `e2e_archivos_persistencia.py` | 60/60 y 60/60 / 48/48 |
+| `e2e_repetible.py` | 87/88: los 6 casos de expedientes pasan. El caso de «matrícula previa 1» supone la base de desarrollo original; en una instalación nueva, la matrícula 1 es la de Luis (V3) |
+
+**Corrección encontrada al probar con Oracle.** La primera aplicación de V5 falló con `ORA-12704: character set
+mismatch`. En los datos iniciales, `UNISTR(...)` (NVARCHAR2) se combinaba con textos VARCHAR2 en `UNION ALL`. Se
+envolvió en `TO_CHAR(UNISTR(...))`. La V5 parcial se revirtió con `V5__rollback.sql` y la base quedó idéntica a la
+huella inicial.
+
+**`e2e_demo.py`** no se ejecutó: es histórico, no usa token (es anterior a Keycloak) y no es repetible. Solo se
+actualizaron sus cuerpos al contrato nuevo.

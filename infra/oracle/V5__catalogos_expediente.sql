@@ -16,7 +16,8 @@
 -- Script ADITIVO para los registros existentes: las columnas nuevas son NULL, y TIPO_DOCUMENTO y
 -- RUTA_ARCHIVO pasan a admitir NULL solo para los documentos con enlace. Los expedientes y documentos
 -- previos quedan "sin tipo de solicitud" y no se les exigen requisitos.
--- Los nombres con tildes usan UNISTR para no depender del juego de caracteres del cliente SQL*Plus.
+-- Los nombres con tildes usan TO_CHAR(UNISTR(...)) para no depender del juego de caracteres del cliente
+-- SQL*Plus; TO_CHAR los deja en VARCHAR2 para combinarlos con textos simples en UNION ALL (evita ORA-12704).
 -- Reversion: V5__rollback.sql (requiere autorizacion; borra los documentos con enlace).
 -- =============================================================================
 
@@ -160,48 +161,48 @@ END;
 
 INSERT INTO CATEGORIAS_TRAMITE (CODIGO, NOMBRE, DESCRIPCION)
 SELECT v.CODIGO, v.NOMBRE, v.DESCRIPCION FROM (
-    SELECT 'ACADEMICO' CODIGO, UNISTR('Tr\00e1mites acad\00e9micos') NOMBRE,
-           UNISTR('Asistencia, cursos, evaluaciones y matr\00edcula') DESCRIPCION FROM DUAL UNION ALL
-    SELECT 'ECONOMICO', UNISTR('Tr\00e1mites econ\00f3micos'),
+    SELECT 'ACADEMICO' CODIGO, TO_CHAR(UNISTR('Tr\00e1mites acad\00e9micos')) NOMBRE,
+           TO_CHAR(UNISTR('Asistencia, cursos, evaluaciones y matr\00edcula')) DESCRIPCION FROM DUAL UNION ALL
+    SELECT 'ECONOMICO', TO_CHAR(UNISTR('Tr\00e1mites econ\00f3micos')),
            'Pagos, devoluciones, deudas y beneficios' FROM DUAL UNION ALL
     SELECT 'CONSTANCIAS', 'Constancias y certificados',
-           UNISTR('Documentos oficiales sobre la situaci\00f3n acad\00e9mica') FROM DUAL
+           TO_CHAR(UNISTR('Documentos oficiales sobre la situaci\00f3n acad\00e9mica')) FROM DUAL
 ) v
 WHERE NOT EXISTS (SELECT 1 FROM CATEGORIAS_TRAMITE c WHERE c.CODIGO = v.CODIGO);
 
 INSERT INTO DESTINATARIOS (CODIGO, NOMBRE)
 SELECT v.CODIGO, v.NOMBRE FROM (
-    SELECT 'COORD_ACADEMICA' CODIGO, UNISTR('Coordinaci\00f3n Acad\00e9mica') NOMBRE FROM DUAL UNION ALL
-    SELECT 'DIR_ESCUELA', UNISTR('Direcci\00f3n de Escuela') FROM DUAL UNION ALL
-    SELECT 'SEC_ACADEMICA', UNISTR('Secretar\00eda Acad\00e9mica') FROM DUAL UNION ALL
-    SELECT 'TESORERIA', UNISTR('Tesorer\00eda') FROM DUAL UNION ALL
+    SELECT 'COORD_ACADEMICA' CODIGO, TO_CHAR(UNISTR('Coordinaci\00f3n Acad\00e9mica')) NOMBRE FROM DUAL UNION ALL
+    SELECT 'DIR_ESCUELA', TO_CHAR(UNISTR('Direcci\00f3n de Escuela')) FROM DUAL UNION ALL
+    SELECT 'SEC_ACADEMICA', TO_CHAR(UNISTR('Secretar\00eda Acad\00e9mica')) FROM DUAL UNION ALL
+    SELECT 'TESORERIA', TO_CHAR(UNISTR('Tesorer\00eda')) FROM DUAL UNION ALL
     SELECT 'BIENESTAR', 'Bienestar Universitario' FROM DUAL
 ) v
 WHERE NOT EXISTS (SELECT 1 FROM DESTINATARIOS d WHERE d.CODIGO = v.CODIGO);
 
 INSERT INTO TIPOS_DOCUMENTO_INSTITUCIONAL (CODIGO, NOMBRE, DESCRIPCION)
 SELECT v.CODIGO, v.NOMBRE, v.DESCRIPCION FROM (
-    SELECT 'FUT' CODIGO, UNISTR('Formulario \00danico de Tr\00e1mite (FUT)') NOMBRE,
+    SELECT 'FUT' CODIGO, TO_CHAR(UNISTR('Formulario \00danico de Tr\00e1mite (FUT)')) NOMBRE,
            'Solicitud firmada con el detalle del pedido' DESCRIPCION FROM DUAL UNION ALL
     SELECT 'DNI', 'Copia de DNI', 'Ambas caras, legible' FROM DUAL UNION ALL
     SELECT 'VOUCHER', 'Voucher de pago', 'Comprobante del pago del derecho de tramite' FROM DUAL UNION ALL
-    SELECT 'CERT_MEDICO', UNISTR('Certificado m\00e9dico'), 'Emitido por un establecimiento de salud' FROM DUAL UNION ALL
-    SELECT 'SILABO', UNISTR('S\00edlabo del curso'), 'Visado por la universidad de origen' FROM DUAL UNION ALL
-    SELECT 'RECORD_NOTAS', UNISTR('R\00e9cord de notas'), 'Historial de calificaciones' FROM DUAL UNION ALL
-    SELECT 'CARTA_MOTIVOS', 'Carta de motivos', UNISTR('Explicaci\00f3n de la situaci\00f3n del estudiante') FROM DUAL UNION ALL
+    SELECT 'CERT_MEDICO', TO_CHAR(UNISTR('Certificado m\00e9dico')), 'Emitido por un establecimiento de salud' FROM DUAL UNION ALL
+    SELECT 'SILABO', TO_CHAR(UNISTR('S\00edlabo del curso')), 'Visado por la universidad de origen' FROM DUAL UNION ALL
+    SELECT 'RECORD_NOTAS', TO_CHAR(UNISTR('R\00e9cord de notas')), 'Historial de calificaciones' FROM DUAL UNION ALL
+    SELECT 'CARTA_MOTIVOS', 'Carta de motivos', TO_CHAR(UNISTR('Explicaci\00f3n de la situaci\00f3n del estudiante')) FROM DUAL UNION ALL
     SELECT 'OTRO', 'Otro documento', 'Documento adicional de sustento' FROM DUAL
 ) v
 WHERE NOT EXISTS (SELECT 1 FROM TIPOS_DOCUMENTO_INSTITUCIONAL t WHERE t.CODIGO = v.CODIGO);
 
 INSERT INTO TIPOS_SOLICITUD (ID_CATEGORIA, CODIGO, NOMBRE, ID_DESTINATARIO_SUGERIDO)
 SELECT c.ID, v.CODIGO, v.NOMBRE, d.ID FROM (
-    SELECT 'ACADEMICO' CATEGORIA, 'JUSTIF_INASISTENCIA' CODIGO, UNISTR('Justificaci\00f3n de inasistencias') NOMBRE,
+    SELECT 'ACADEMICO' CATEGORIA, 'JUSTIF_INASISTENCIA' CODIGO, TO_CHAR(UNISTR('Justificaci\00f3n de inasistencias')) NOMBRE,
            'COORD_ACADEMICA' DESTINATARIO FROM DUAL UNION ALL
-    SELECT 'ACADEMICO', 'CONVALIDACION', UNISTR('Convalidaci\00f3n de cursos'), 'DIR_ESCUELA' FROM DUAL UNION ALL
+    SELECT 'ACADEMICO', 'CONVALIDACION', TO_CHAR(UNISTR('Convalidaci\00f3n de cursos')), 'DIR_ESCUELA' FROM DUAL UNION ALL
     SELECT 'ACADEMICO', 'RETIRO_CURSO', 'Retiro de curso', 'COORD_ACADEMICA' FROM DUAL UNION ALL
     SELECT 'ACADEMICO', 'EXAMEN_REZAGADO', 'Examen rezagado', 'COORD_ACADEMICA' FROM DUAL UNION ALL
-    SELECT 'ACADEMICO', 'RESERVA_MATRICULA', UNISTR('Reserva de matr\00edcula'), 'SEC_ACADEMICA' FROM DUAL UNION ALL
-    SELECT 'ECONOMICO', 'DEVOLUCION_PAGO', UNISTR('Devoluci\00f3n de pago'), 'TESORERIA' FROM DUAL UNION ALL
+    SELECT 'ACADEMICO', 'RESERVA_MATRICULA', TO_CHAR(UNISTR('Reserva de matr\00edcula')), 'SEC_ACADEMICA' FROM DUAL UNION ALL
+    SELECT 'ECONOMICO', 'DEVOLUCION_PAGO', TO_CHAR(UNISTR('Devoluci\00f3n de pago')), 'TESORERIA' FROM DUAL UNION ALL
     SELECT 'ECONOMICO', 'FRACCIONAMIENTO', 'Fraccionamiento de deuda', 'TESORERIA' FROM DUAL UNION ALL
     SELECT 'ECONOMICO', 'BECA_DESCUENTO', 'Beca o descuento', 'BIENESTAR' FROM DUAL UNION ALL
     SELECT 'CONSTANCIAS', 'CONSTANCIA_ESTUDIOS', 'Constancia de estudios', 'SEC_ACADEMICA' FROM DUAL UNION ALL
