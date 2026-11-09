@@ -27,29 +27,78 @@ export const ESTADOS_EDITABLES: EstadoExpediente[] = ['REGISTRADO', 'OBSERVADO']
 
 export const MAX_DOCUMENTOS = 20;
 
+/** Registro activo de un catalogo de tramite (V5). */
+export interface Catalogo {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+}
+
+export interface CatalogoResumen {
+  id: number;
+  codigo: string;
+  nombre: string;
+}
+
+export interface Requisito {
+  tipoDocumentoInstitucionalId: number;
+  codigo: string;
+  nombre: string;
+  /** false: recomendado, no se exige. */
+  obligatorio: boolean;
+}
+
+export interface TipoSolicitud {
+  id: number;
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  categoriaId: number;
+  /** null si el destinatario sugerido esta inactivo: hay que elegir uno. */
+  destinatarioSugerido: CatalogoResumen | null;
+  requisitos: Requisito[];
+}
+
+/**
+ * Documento por metadatos: ruta declarada (nombreArchivo, tipoDocumento y rutaArchivo) o enlace de SharePoint.
+ * En un documento con archivo cargado solo cuentan el nombre y el tipo institucional.
+ */
 export interface DocumentoAdjuntoRequest {
   nombre: string;
-  nombreArchivo: string;
-  tipoDocumento: TipoArchivo;
-  rutaArchivo: string;
+  tipoDocumentoInstitucionalId: number;
+  nombreArchivo?: string | null;
+  tipoDocumento?: TipoArchivo | null;
+  rutaArchivo?: string | null;
+  enlace?: string | null;
 }
 
 export interface DocumentoAdjunto {
   id: number;
   nombre: string;
+  /** null solo en documentos registrados antes de los catalogos. */
+  tipoDocumentoInstitucional: CatalogoResumen | null;
   nombreArchivo: string;
-  tipoDocumento: TipoArchivo;
-  /** Ruta declarada en los registros anteriores; null si el archivo esta en el almacen del sistema. */
+  /** Formato del archivo; null en un documento con enlace. */
+  tipoDocumento: TipoArchivo | null;
+  /** Ruta declarada en los registros anteriores; null si el archivo esta en el almacen o hay enlace. */
   rutaArchivo: string | null;
+  /** Enlace institucional de SharePoint: se abre en una pestana nueva, no se descarga. */
+  enlace: string | null;
+  tamanoBytes: number | null;
   fechaCarga: string;
   archivoDisponible: boolean;
 }
 
+/** El codigo de tramite (TR-AAAA-NNNNN) lo genera el servidor. */
 export interface ExpedienteRequest {
-  codigoTramite: string;
   asunto: string;
   /** Lo indica el personal; para un ESTUDIANTE el backend usa la persona de su token. */
   personaId: number | null;
+  categoriaId: number;
+  tipoSolicitudId: number;
+  /** null: el destinatario sugerido del tipo. */
+  destinatarioId: number | null;
   documentos: DocumentoAdjuntoRequest[];
 }
 
@@ -62,6 +111,8 @@ export interface ExpedienteResumen {
   totalDocumentos: number;
   personaId: number;
   personaNombre: string;
+  /** null en los expedientes registrados antes de los catalogos. */
+  tipoSolicitudNombre: string | null;
 }
 
 export interface Expediente {
@@ -79,6 +130,10 @@ export interface Expediente {
     idEscuela: number | null;
     escuelaNombre: string | null;
   };
+  /** null en los expedientes registrados antes de los catalogos. */
+  categoria: CatalogoResumen | null;
+  tipoSolicitud: CatalogoResumen | null;
+  destinatario: CatalogoResumen | null;
   documentos: DocumentoAdjunto[];
 }
 
@@ -95,15 +150,30 @@ export interface FiltroExpedientes {
   hasta?: string | null;
 }
 
-/** Parte "datos" del registro con archivos: los nombres van en el mismo orden que los archivos. */
+/** Documento del registro multipart: sin enlace recibe, en orden, el siguiente archivo. */
+export interface DocumentoArchivoRequest {
+  nombre: string;
+  tipoDocumentoInstitucionalId: number;
+  enlace: string | null;
+}
+
+/** Parte "datos" del registro multipart; los archivos van en el orden de los documentos sin enlace. */
 export interface ExpedienteArchivosRequest {
-  codigoTramite: string;
   asunto: string;
   personaId: number | null;
-  nombres: string[];
+  categoriaId: number;
+  tipoSolicitudId: number;
+  destinatarioId: number | null;
+  documentos: DocumentoArchivoRequest[];
 }
 
 /** Lo mismo que acepta AlmacenArchivos del backend (el servidor vuelve a validar el contenido). */
 export const TAMANO_MAXIMO_ARCHIVO = 5 * 1024 * 1024;
 export const EXTENSIONES_ARCHIVO = ['.pdf', '.png', '.jpg', '.jpeg'];
 export const ACEPTA_ARCHIVO = 'application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg';
+
+/** Suma maxima de archivos de un expediente (lamb.archivos.tamano-maximo-expediente); los enlaces no cuentan. */
+export const TAMANO_MAXIMO_EXPEDIENTE = 25 * 1024 * 1024;
+
+/** Dominios de SharePoint y OneDrive de la universidad (EnlaceSharePoint del backend). */
+export const DOMINIOS_SHAREPOINT = ['upeuedupe.sharepoint.com', 'upeuedupe-my.sharepoint.com'];

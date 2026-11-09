@@ -42,11 +42,14 @@ public class AlmacenArchivos {
 
     private final Path directorio;
     private final long tamanoMaximo;
+    private final long tamanoMaximoExpediente;
 
     public AlmacenArchivos(@Value("${lamb.archivos.directorio:${user.home}/lamb-academic-archivos}") String directorio,
-                           @Value("${lamb.archivos.tamano-maximo:5MB}") DataSize tamanoMaximo) {
+                           @Value("${lamb.archivos.tamano-maximo:5MB}") DataSize tamanoMaximo,
+                           @Value("${lamb.archivos.tamano-maximo-expediente:25MB}") DataSize tamanoMaximoExpediente) {
         this.directorio = Path.of(directorio).toAbsolutePath().normalize();
         this.tamanoMaximo = tamanoMaximo.toBytes();
+        this.tamanoMaximoExpediente = tamanoMaximoExpediente.toBytes();
     }
 
     public record ArchivoGuardado(String ruta, TipoArchivo tipo, long tamano) {
@@ -58,6 +61,25 @@ public class AlmacenArchivos {
 
     public long tamanoMaximo() {
         return tamanoMaximo;
+    }
+
+    /** Suma maxima de los archivos cargados de un expediente; los enlaces no cuentan. */
+    public long tamanoMaximoExpediente() {
+        return tamanoMaximoExpediente;
+    }
+
+    /** Tamano de un archivo ya guardado (documentos cargados antes de V5, sin TAMANO_BYTES); 0 si no esta. */
+    public long tamano(String ruta) {
+        if (!esAlmacenado(ruta)) {
+            return 0;
+        }
+        try {
+            Path archivo = resolver(clave(ruta));
+            return Files.isRegularFile(archivo) ? Files.size(archivo) : 0;
+        } catch (IOException | RuntimeException e) {
+            log.warn("No se pudo leer el tamano del archivo {}: {}", ruta, e.getMessage());
+            return 0;
+        }
     }
 
     /** Valida y guarda el archivo; devuelve la ruta interna que se registra en el documento. */

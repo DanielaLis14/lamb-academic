@@ -11,6 +11,7 @@ Uso:
 """
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -92,37 +93,85 @@ caso("Docente no lista expedientes", estado, 403)
 estado, _ = llamar("ana.quispe", "GET", f"/api/v1/docentes/mi-carga?periodoId={activo['id']}")
 caso("Estudiante no usa la carga docente", estado, 403)
 
+# ------------------------------------------------------------------ Catalogos de tramite (V5)
+estado, categorias = llamar("docente.mendoza", "GET", "/api/v1/expedientes/catalogos/categorias")
+caso("Cualquier sesion consulta los catalogos de tramite (docente)", estado, 200)
+CATEGORIA = {c["codigo"]: c["id"] for c in categorias} if estado == 200 else {}
+_, tipos = llamar("ana.quispe", "GET", f"/api/v1/expedientes/catalogos/categorias/{CATEGORIA['ACADEMICO']}/tipos-solicitud")
+TIPO = {t["codigo"]: t for t in tipos}
+_, documentos_cat = llamar("ana.quispe", "GET", "/api/v1/expedientes/catalogos/tipos-documento")
+DOC = {d["codigo"]: d["id"] for d in documentos_cat}
+justificacion = TIPO["JUSTIF_INASISTENCIA"]
+caso("Justificacion de inasistencias: FUT obligatorio y certificado medico recomendado",
+     sorted((r["codigo"], r["obligatorio"]) for r in justificacion["requisitos"]),
+     sorted([("FUT", True), ("CERT_MEDICO", False)]))
+
+
+def solicitud(tipo, asunto, documentos, categoria="ACADEMICO", **extra):
+    return {"asunto": f"{asunto} (prueba {SELLO})", "categoriaId": CATEGORIA[categoria],
+            "tipoSolicitudId": TIPO[tipo]["id"], "documentos": documentos, **extra}
+
+
 # ------------------------------------------------------------------ Expediente -> DocumentoAdjunto
-documento = {"nombre": "DNI", "nombreArchivo": "dni.pdf", "tipoDocumento": "PDF", "rutaArchivo": "/pruebas/dni.pdf"}
-estado, exp = llamar("ana.quispe", "POST", "/api/v1/expedientes", {
-    "codigoTramite": f"E2E-{SELLO}-A", "asunto": "Constancia de estudios (prueba)",
-    "personaId": jose["persona"]["id"], "documentos": [documento]})
-caso("Estudiante registra expediente (cabecera y documento juntos)", estado, 201)
+documento = {"nombre": "FUT", "tipoDocumentoInstitucionalId": DOC["FUT"], "nombreArchivo": "fut.pdf",
+             "tipoDocumento": "PDF", "rutaArchivo": "/pruebas/fut.pdf"}
+estado, exp = llamar("ana.quispe", "POST", "/api/v1/expedientes", solicitud(
+    "RETIRO_CURSO", "Retiro de curso", [documento], personaId=jose["persona"]["id"], codigoTramite="NO-SE-USA"))
+caso("Estudiante registra expediente (cabecera y documento juntos)", estado, 201, mensaje(exp))
 exp_id = exp["id"] if estado == 201 else None
 if exp_id:
     caso("El expediente queda a nombre del estudiante, no de la persona enviada",
          0, 0 if exp["persona"]["id"] == ana["persona"]["id"] else 1)
-    estado, r = llamar("ana.quispe", "POST", "/api/v1/expedientes", {
-        "codigoTramite": f"E2E-{SELLO}-B", "asunto": "Documento mal tipado",
-        "documentos": [documento, {**documento, "nombreArchivo": "foto.jpg"}]})
+    caso("El servidor genera el codigo TR-AAAA-NNNNN e ignora el enviado",
+         bool(re.fullmatch(r"TR-\d{4}-\d{5,}", exp["codigoTramite"])), True, exp["codigoTramite"])
+    caso("Sin destinatario se usa el sugerido del tipo", exp["destinatario"]["codigo"], "COORD_ACADEMICA")
+    estado, r = llamar("ana.quispe", "POST", "/api/v1/expedientes", solicitud("RETIRO_CURSO", "Duplicado", [documento]))
+    caso("Otro expediente del mismo tipo en curso se rechaza y nombra el existente", (estado, exp["codigoTramite"] in mensaje(r)),
+         (409, True), mensaje(r))
+    estado, r = llamar("ana.quispe", "POST", "/api/v1/expedientes", solicitud(
+        "JUSTIF_INASISTENCIA", "Sin FUT", [{**documento, "tipoDocumentoInstitucionalId": DOC["CERT_MEDICO"]}]))
+    caso("Faltan documentos obligatorios (422) y se nombran", (estado, "FUT" in mensaje(r)), (422, True), mensaje(r))
+    estado, r = llamar("ana.quispe", "POST", "/api/v1/expedientes", solicitud(
+        "JUSTIF_INASISTENCIA", "Categoria ajena", [documento], categoria="ECONOMICO"))
+    caso("El tipo de solicitud de otra categoria se rechaza (422)", estado, 422, mensaje(r))
+    asunto_b = f"Documento mal tipado (prueba {SELLO})"
+    estado, r = llamar("ana.quispe", "POST", "/api/v1/expedientes", solicitud(
+        "JUSTIF_INASISTENCIA", "Documento mal tipado", [documento, {**documento, "nombreArchivo": "foto.jpg"}]))
     caso("Un documento invalido revierte todo el registro", estado, 409, mensaje(r))
     estado, r = llamar("coordinador", "GET", f"/api/v1/expedientes?estado=REGISTRADO")
-    caso("El expediente rechazado no quedo guardado", 0,
-         0 if not any(e["codigoTramite"] == f"E2E-{SELLO}-B" for e in r) else 1)
+    caso("El expediente rechazado no quedo guardado", 0, 0 if not any(e["asunto"] == asunto_b for e in r) else 1)
     doc_id = exp["documentos"][0]["id"]
     estado, r = llamar("ana.quispe", "DELETE", f"/api/v1/expedientes/{exp_id}/documentos/{doc_id}")
     caso("No se quita el unico documento", estado, 409, mensaje(r))
     estado, r = llamar("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos",
-                       {**documento, "nombre": "Certificado", "nombreArchivo": "certificado.pdf"})
+                       {**documento, "nombre": "Certificado", "tipoDocumentoInstitucionalId": DOC["OTRO"],
+                        "nombreArchivo": "certificado.pdf"})
     caso("Estudiante agrega un documento", estado, 201, f"total {r.get('totalDocumentos')}" if estado == 201 else "")
+    otro_id = next((d["id"] for d in r["documentos"] if d["nombre"] == "Certificado"), None) if estado == 201 else None
     estado, r = llamar("ana.quispe", "PUT", f"/api/v1/expedientes/{exp_id}/documentos/{doc_id}",
                        {**documento, "nombreArchivo": "certificado.pdf"})
     caso("Corregir con un archivo repetido se rechaza", estado, 409, mensaje(r))
     estado, r = llamar("ana.quispe", "PUT", f"/api/v1/expedientes/{exp_id}/documentos/{doc_id}",
-                       {**documento, "nombre": "DNI ambas caras", "nombreArchivo": "dni-ambas.pdf"})
+                       {**documento, "nombre": "FUT firmado", "nombreArchivo": "fut-firmado.pdf"})
     caso("Estudiante corrige un documento", estado, 200)
     estado, r = llamar("ana.quispe", "DELETE", f"/api/v1/expedientes/{exp_id}/documentos/{doc_id}")
-    caso("Estudiante quita un documento", estado, 200, f"total {r.get('totalDocumentos')}" if estado == 200 else "")
+    caso("No se quita el unico documento obligatorio (FUT) (422)", estado, 422, mensaje(r))
+    estado, r = llamar("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos",
+                       {"nombre": "Anexo en SharePoint", "tipoDocumentoInstitucionalId": DOC["OTRO"],
+                        "enlace": "https://upeuedupe.sharepoint.com/:b:/s/tramites/E2E" + SELLO})
+    con_enlace = next((d for d in r["documentos"] if d["enlace"]), {}) if estado == 201 else {}
+    caso("Agrega un documento con enlace de SharePoint (sin archivo ni tamano)", (estado, con_enlace.get("tamanoBytes"),
+         con_enlace.get("archivoDisponible")), (201, None, False), mensaje(r))
+    estado, r = llamar("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos",
+                       {"nombre": "Drive", "tipoDocumentoInstitucionalId": DOC["OTRO"],
+                        "enlace": "https://drive.google.com/file/d/123"})
+    caso("Un enlace que no es de SharePoint de la universidad se rechaza", estado, 409, mensaje(r))
+    if con_enlace:
+        estado, _ = llamar("ana.quispe", "GET", f"/api/v1/expedientes/{exp_id}/documentos/{con_enlace['id']}/archivo")
+        caso("Un documento con enlace no se descarga del almacen", estado, 404)
+    if otro_id:
+        estado, r = llamar("ana.quispe", "DELETE", f"/api/v1/expedientes/{exp_id}/documentos/{otro_id}")
+        caso("Estudiante quita un documento", estado, 200, f"total {r.get('totalDocumentos')}" if estado == 200 else "")
     estado, _ = llamar("jose.apaza", "GET", f"/api/v1/expedientes/{exp_id}")
     caso("Otro estudiante no abre el expediente", estado, 403)
     estado, r = llamar("jose.apaza", "GET", "/api/v1/expedientes")
@@ -136,6 +185,11 @@ if exp_id:
     caso("En revision no se agregan documentos", estado, 409, mensaje(r))
     estado, _ = llamar("coordinador", "PATCH", f"/api/v1/expedientes/{exp_id}/estado", {"estado": "ARCHIVADO"})
     caso("Transicion no permitida (EN_REVISION -> ARCHIVADO)", estado, 409)
+    # Cierre: un expediente archivado ya no bloquea otro del mismo tipo (el script se puede repetir).
+    estado, _ = llamar("coordinador", "PATCH", f"/api/v1/expedientes/{exp_id}/estado", {"estado": "OBSERVADO"})
+    caso("Coordinacion observa el expediente", estado, 200)
+    estado, _ = llamar("coordinador", "PATCH", f"/api/v1/expedientes/{exp_id}/estado", {"estado": "ARCHIVADO"})
+    caso("Coordinacion archiva el expediente de prueba", estado, 200)
 estado, _ = llamar("cajero", "GET", "/api/v1/expedientes")
 caso("Caja no accede a expedientes", estado, 403)
 

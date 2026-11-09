@@ -7,14 +7,17 @@ spring:
   # Si el archivo no existe, se usan las variables de entorno del sistema.
   config:
     import: optional:file:.env[.properties]
-  # Documentos de expedientes: 5 MB por archivo (lamb.archivos.tamano-maximo) y hasta 20 por expediente.
+  # Documentos de expedientes: 5 MB por archivo, 25 MB por expediente y hasta 20 documentos (lamb.archivos).
   servlet:
     multipart:
       max-file-size: 5MB
-      max-request-size: 60MB
+      # Red de seguridad del contenedor; el total de 25 MB por expediente lo exige el servicio con su mensaje.
+      max-request-size: 30MB
 
 lamb:
   archivos:
     # Almacen privado, fuera de las carpetas que sirve la aplicacion. Nunca dentro del proyecto.
     directorio: ${LAMB_ARCHIVOS_DIR:${user.home}/lamb-academic-archivos}
     tamano-maximo: 5MB
+    # Suma de los archivos cargados de un expediente; los enlaces de SharePoint no cuentan.
+    tamano-maximo-expediente: 25MB

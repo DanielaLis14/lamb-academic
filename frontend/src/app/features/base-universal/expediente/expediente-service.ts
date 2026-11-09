@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api-service';
 import {
+  Catalogo,
   DocumentoAdjuntoRequest,
   EstadoExpediente,
   Expediente,
@@ -11,6 +12,7 @@ import {
   ExpedienteRequest,
   ExpedienteResumen,
   FiltroExpedientes,
+  TipoSolicitud,
 } from './expediente.model';
 
 /** El backend limita al ESTUDIANTE a sus propios expedientes con la persona de su token. */
@@ -36,7 +38,10 @@ export class ExpedienteService {
     return this.http.post<Expediente>(this.api.buildUrl(this.resource), expediente);
   }
 
-  /** Cabecera y archivos en una sola peticion multipart; el servidor guarda los archivos en su almacen privado. */
+  /**
+   * Cabecera, archivos y enlaces en una sola peticion multipart; el servidor guarda los archivos en su almacen
+   * privado. Los archivos van en el orden de los documentos sin enlace.
+   */
   registrarConArchivos(datos: ExpedienteArchivosRequest, archivos: File[]): Observable<Expediente> {
     const formulario = new FormData();
     formulario.append('datos', new Blob([JSON.stringify(datos)], { type: 'application/json' }));
@@ -44,10 +49,37 @@ export class ExpedienteService {
     return this.http.post<Expediente>(this.api.buildUrl(this.resource), formulario);
   }
 
-  agregarArchivo(id: number, nombre: string, archivo: File): Observable<Expediente> {
+  /** Catalogos de tramite: solo registros activos; los consulta cualquier sesion. */
+  categorias(): Observable<Catalogo[]> {
+    return this.http.get<Catalogo[]>(this.api.buildUrl(`${this.resource}/catalogos/categorias`));
+  }
+
+  tiposSolicitud(categoriaId: number): Observable<TipoSolicitud[]> {
+    return this.http.get<TipoSolicitud[]>(
+      this.api.buildUrl(`${this.resource}/catalogos/categorias/${categoriaId}/tipos-solicitud`),
+    );
+  }
+
+  destinatarios(): Observable<Catalogo[]> {
+    return this.http.get<Catalogo[]>(this.api.buildUrl(`${this.resource}/catalogos/destinatarios`));
+  }
+
+  tiposDocumento(): Observable<Catalogo[]> {
+    return this.http.get<Catalogo[]>(this.api.buildUrl(`${this.resource}/catalogos/tipos-documento`));
+  }
+
+  /** Agrega un documento con su archivo o con un enlace de SharePoint (solo uno de los dos). */
+  agregarArchivo(
+    id: number,
+    nombre: string,
+    tipoDocumentoInstitucionalId: number,
+    contenido: { archivo: File } | { enlace: string },
+  ): Observable<Expediente> {
     const formulario = new FormData();
     formulario.append('nombre', nombre);
-    formulario.append('archivo', archivo, archivo.name);
+    formulario.append('tipoDocumentoInstitucionalId', String(tipoDocumentoInstitucionalId));
+    if ('archivo' in contenido) formulario.append('archivo', contenido.archivo, contenido.archivo.name);
+    else formulario.append('enlace', contenido.enlace);
     return this.http.post<Expediente>(this.api.buildUrl(`${this.resource}/${id}/documentos`), formulario);
   }
 

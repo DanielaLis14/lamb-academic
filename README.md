@@ -62,8 +62,22 @@ cd ..
   python -I infra/oracle/inicializar_base.py
   ```
 
-  El script ejecuta `V1`, `V2` y `V4` y, al final, `V3` (datos ficticios). Si `LAMB_APP` ya tiene tablas, se
-  detiene sin cambiar nada. Para crear solo el esquema vacío, agregue `--sin-datos-demo`.
+  El script ejecuta `V1`, `V2`, `V4` y `V5` (catálogos de trámite) y, al final, `V3` (datos ficticios). Si
+  `LAMB_APP` ya tiene tablas, se detiene sin cambiar nada. Para crear solo el esquema vacío, agregue
+  `--sin-datos-demo`; `V5` se aplica igual, porque sin sus catálogos no se pueden registrar expedientes.
+- **Base que ya existía antes de V5** (tiene V1–V4): `inicializar_base.py` no la toca. Después de un respaldo Data
+  Pump, aplique solo `V5`:
+
+  ```powershell
+  $clave = Read-Host 'Clave de LAMB_APP' -AsSecureString
+  $env:LAMB_CLAVE = [Net.NetworkCredential]::new('', $clave).Password
+  Get-Content infra/oracle/V5__catalogos_expediente.sql -Raw |
+    docker exec -i -e LAMB_CLAVE lamb-academic-oracle bash -c 'sqlplus -S -L "LAMB_APP/$LAMB_CLAVE@localhost:1521/FREEPDB1"'
+  Remove-Item Env:LAMB_CLAVE
+  ```
+
+  La clave no queda en el historial ni en la salida. La reversión es `V5__rollback.sql` y **borra los documentos
+  con enlace de SharePoint**.
 - **Keycloak**: importa el realm `lamb-academic` desde `infra/keycloak/realm/` (roles, cliente PKCE y tema UPeU).
   Después cree las cuentas de prueba, como se indica en la sección 6.
 
@@ -149,6 +163,8 @@ Para ver cómo se integró cada aporte y qué endpoints usa, consulte [docs/INTE
 | `infra/oracle/V1__esquema_base_matricula.sql` | Tablas base de Matrícula (solo bases nuevas) |
 | `infra/oracle/V2__integracion_modulos.sql` | Tablas de Base Universal, Core Académico y Finanzas |
 | `infra/oracle/V4__resultado_detalle_matricula.sql` | Resultado final del curso (prerrequisitos aprobados) |
+| `infra/oracle/V5__catalogos_expediente.sql` | Catálogos de trámite (categorías, tipos de solicitud, destinatarios, documentos y requisitos), código TR-AAAA-NNNNN y enlaces de SharePoint |
+| `infra/oracle/V5__rollback.sql` | Reversión de V5 (solo con autorización y respaldo) |
 | `infra/oracle/V3__datos_demo.sql` | Datos **ficticios**, ver detalle debajo de la tabla |
 | `infra/oracle/inicializar_base.py` | Ejecuta los scripts anteriores en orden sobre una base nueva |
 | `infra/keycloak/realm/lamb-academic-realm.json` | Realm sin usuarios ni claves |

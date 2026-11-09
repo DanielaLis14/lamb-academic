@@ -1,6 +1,7 @@
 """HISTORICO (2026-10-24, primera integracion): 46 casos que CREAN datos fijos de demostracion.
 NO es repetible (una segunda ejecucion devuelve 409 donde esperaba 201). Se conserva como evidencia.
-Para volver a probar usar infra/pruebas/e2e_repetible.py (datos aislados y autolimpieza)."""
+Para volver a probar usar infra/pruebas/e2e_repetible.py (datos aislados y autolimpieza).
+2026-11: los cuerpos de expediente se actualizaron al contrato de V5 (catalogos, codigo generado por el servidor)."""
 import json
 import sys
 import urllib.error
@@ -86,19 +87,30 @@ a = caso("Registrar alumno", "POST", "/api/v1/alumnos", 201, {
     "personaId": p["id"], "codigoEstudiante": "2026100004", "fechaIngreso": "2025-03-01"})
 caso("Docente como alumno (409)", "POST", "/api/v1/alumnos", 409, {
     "personaId": 4, "codigoEstudiante": "2026199999", "fechaIngreso": "2025-03-01"})
+# Desde V5 el codigo lo genera el servidor y el expediente lleva catalogos (se buscan por codigo).
+cat = {c["codigo"]: c["id"] for c in llamar("GET", "/api/v1/expedientes/catalogos/categorias")[1]}
+tip = {t["codigo"]: t["id"] for t in llamar("GET", "/api/v1/expedientes/catalogos/categorias/%d/tipos-solicitud"
+                                             % cat["CONSTANCIAS"])[1]}
+doc = {d["codigo"]: d["id"] for d in llamar("GET", "/api/v1/expedientes/catalogos/tipos-documento")[1]}
 e = caso("Expediente cabecera-detalle", "POST", "/api/v1/expedientes", 201, {
-    "codigoTramite": "EXP-2026-0001", "asunto": "Constancia de matricula", "personaId": p["id"],
+    "asunto": "Constancia de matricula", "personaId": p["id"], "categoriaId": cat["CONSTANCIAS"],
+    "tipoSolicitudId": tip["CONSTANCIA_ESTUDIOS"],
     "documentos": [
-        {"nombre": "DNI", "nombreArchivo": "dni.pdf", "tipoDocumento": "PDF", "rutaArchivo": "/docs/dni.pdf"},
-        {"nombre": "Foto", "nombreArchivo": "foto.jpg", "tipoDocumento": "JPG", "rutaArchivo": "/docs/foto.jpg"}]},
-     verificar=lambda b, h: f"totalDocumentos={b['totalDocumentos']}")
+        {"nombre": "FUT", "tipoDocumentoInstitucionalId": doc["FUT"], "nombreArchivo": "fut.pdf",
+         "tipoDocumento": "PDF", "rutaArchivo": "/docs/fut.pdf"},
+        {"nombre": "Voucher", "tipoDocumentoInstitucionalId": doc["VOUCHER"], "nombreArchivo": "voucher.jpg",
+         "tipoDocumento": "JPG", "rutaArchivo": "/docs/voucher.jpg"}]},
+     verificar=lambda b, h: f"codigo={b['codigoTramite']} totalDocumentos={b['totalDocumentos']}")
 caso("Expediente con archivo inconsistente: rollback (409)", "POST", "/api/v1/expedientes", 409, {
-    "codigoTramite": "EXP-2026-0002", "asunto": "Rollback", "personaId": p["id"],
+    "asunto": "Rollback", "personaId": p["id"], "categoriaId": cat["CONSTANCIAS"],
+    "tipoSolicitudId": tip["CERTIFICADO_ESTUDIOS"],
     "documentos": [
-        {"nombre": "Ok", "nombreArchivo": "ok.pdf", "tipoDocumento": "PDF", "rutaArchivo": "/d/ok.pdf"},
-        {"nombre": "Mal", "nombreArchivo": "mal.png", "tipoDocumento": "PDF", "rutaArchivo": "/d/mal.png"}]})
-caso("Rollback verificado: EXP-2026-0002 no existe", "GET", "/api/v1/expedientes?personaId=%d" % p["id"], 200,
-     verificar=lambda b, h: (lambda c: (_ for _ in ()).throw(AssertionError(c)) if "EXP-2026-0002" in c else f"codigos={c}")(
+        {"nombre": "FUT", "tipoDocumentoInstitucionalId": doc["FUT"], "nombreArchivo": "ok.pdf",
+         "tipoDocumento": "PDF", "rutaArchivo": "/d/ok.pdf"},
+        {"nombre": "Mal", "tipoDocumentoInstitucionalId": doc["VOUCHER"], "nombreArchivo": "mal.png",
+         "tipoDocumento": "PDF", "rutaArchivo": "/d/mal.png"}]})
+caso("Rollback verificado: solo existe el expediente registrado", "GET", "/api/v1/expedientes?personaId=%d" % p["id"], 200,
+     verificar=lambda b, h: (lambda c: (_ for _ in ()).throw(AssertionError(c)) if c != [e["codigoTramite"]] else f"codigos={c}")(
          [x["codigoTramite"] for x in b]))
 caso("Resumen de expedientes", "GET", "/api/v1/expedientes/resumen", 200)
 

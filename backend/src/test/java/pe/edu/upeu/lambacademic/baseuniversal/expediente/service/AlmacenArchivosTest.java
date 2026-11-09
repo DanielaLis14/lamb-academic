@@ -25,7 +25,7 @@ class AlmacenArchivosTest {
     Path directorio;
 
     private AlmacenArchivos almacen() {
-        return new AlmacenArchivos(directorio.toString(), DataSize.ofKilobytes(1));
+        return new AlmacenArchivos(directorio.toString(), DataSize.ofKilobytes(1), DataSize.ofKilobytes(3));
     }
 
     @Test
@@ -79,6 +79,19 @@ class AlmacenArchivosTest {
         assertThat(AlmacenArchivos.nombreVisible(new MockMultipartFile("a", "C:\\temp\\..\\dni\u0000.pdf", null, PDF)))
                 .isEqualTo("dni.pdf");
         assertThat(AlmacenArchivos.nombreVisible(new MockMultipartFile("a", "", null, PDF))).isEqualTo("archivo");
+    }
+
+    @Test
+    @DisplayName("Informa el tamano guardado y el maximo por expediente; una ruta ajena mide 0")
+    void tamanoDeArchivoGuardado() {
+        AlmacenArchivos almacen = almacen();
+        var guardado = almacen.guardar(new MockMultipartFile("archivo", "foto.png", "image/png", PNG));
+
+        assertThat(guardado.tamano()).isEqualTo(PNG.length);
+        assertThat(almacen.tamano(guardado.ruta())).isEqualTo(PNG.length);
+        assertThat(almacen.tamano("/tramites/foto.png")).isZero();
+        assertThat(almacen.tamano("almacen:00000000-0000-0000-0000-000000000000.pdf")).isZero();
+        assertThat(almacen.tamanoMaximoExpediente()).isEqualTo(3 * 1024);
     }
 
     @Test

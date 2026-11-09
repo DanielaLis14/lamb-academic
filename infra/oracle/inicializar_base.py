@@ -1,6 +1,7 @@
 """Crea el esquema de LAMB Academic en una base Oracle NUEVA (contenedor de compose-dev.yml).
 
-Ejecuta, dentro del contenedor y como LAMB_APP, V1, V2 y V4 y, salvo --sin-datos-demo, V3 (personas ficticias).
+Ejecuta, dentro del contenedor y como LAMB_APP, V1, V2, V4 y V5 (catalogos de tramite, necesarios para registrar
+expedientes) y, salvo --sin-datos-demo, V3 (personas ficticias).
 La clave de LAMB_APP se lee de infra/.env (APP_USER_PASSWORD) y no se imprime.
 
 Se niega a continuar si LAMB_APP ya tiene tablas: nunca modifica una base con datos.
@@ -15,7 +16,8 @@ import time
 
 ORACLE = os.path.dirname(os.path.abspath(__file__))
 ENV_INFRA = os.path.join(os.path.dirname(ORACLE), ".env")
-SCRIPTS = ["V1__esquema_base_matricula", "V2__integracion_modulos", "V4__resultado_detalle_matricula"]
+SCRIPTS = ["V1__esquema_base_matricula", "V2__integracion_modulos", "V4__resultado_detalle_matricula",
+           "V5__catalogos_expediente"]
 DEMO = "V3__datos_demo"
 SALTO = chr(10)
 RETORNO = chr(13)

@@ -4,7 +4,8 @@
       <p class="migas"><a routerLink="/expedientes">{{ esCoordinacion() ? 'Expedientes' : 'Mis expedientes' }}</a></p>
       <h1>Nuevo expediente</h1>
       <p class="descripcion">
-        El expediente y sus archivos se registran juntos: si un archivo no es válido, no se guarda nada.
+        El expediente y sus documentos se registran juntos: si un documento no es válido o falta uno obligatorio, no se
+        guarda nada. El código de trámite lo asigna el sistema.
       </p>
     </div>
   </header>
@@ -17,10 +18,39 @@
 
       <div class="campos">
         <div class="campo">
-          <label for="codigoTramite">Código de trámite <span class="obligatorio">*</span></label>
-          <input id="codigoTramite" type="text" formControlName="codigoTramite" maxlength="50" />
-          <span class="ayuda">Se sugiere uno con la fecha y hora; debe ser único.</span>
-          @if (mensaje('codigoTramite'); as m) {
+          <label for="categoriaId">Categoría <span class="obligatorio">*</span></label>
+          <select id="categoriaId" formControlName="categoriaId">
+            <option [ngValue]="null">Selecciona la categoría</option>
+            @for (c of categorias(); track c.id) {
+              <option [ngValue]="c.id">{{ c.nombre }}</option>
+            }
+          </select>
+          @if (mensaje('categoriaId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="tipoSolicitudId">Tipo de solicitud <span class="obligatorio">*</span></label>
+          <select id="tipoSolicitudId" formControlName="tipoSolicitudId">
+            <option [ngValue]="null">{{ form.controls.categoriaId.value === null ? 'Primero elige la categoría' : 'Selecciona el tipo' }}</option>
+            @for (t of tipos(); track t.id) {
+              <option [ngValue]="t.id">{{ t.nombre }}</option>
+            }
+          </select>
+          @if (mensaje('tipoSolicitudId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="destinatarioId">Destinatario <span class="obligatorio">*</span></label>
+          <select id="destinatarioId" formControlName="destinatarioId">
+            <option [ngValue]="null">Selecciona el destinatario</option>
+            @for (d of destinatarios(); track d.id) {
+              <option [ngValue]="d.id">{{ d.nombre }}</option>
+            }
+          </select>
+          <span class="ayuda">Se propone el que corresponde al tipo de solicitud.</span>
+          @if (mensaje('destinatarioId'); as m) {
             <span class="error-campo">{{ m }}</span>
           }
         </div>
@@ -48,10 +78,29 @@
         }
       </div>
 
+      @if (tipoElegido(); as tipo) {
+        <div aria-label="Documentos del tipo de solicitud">
+          <h2>Documentos para {{ tipo.nombre }}</h2>
+          @if (tipo.requisitos.length) {
+            <ul class="lista-motivos">
+              @for (r of tipo.requisitos; track r.tipoDocumentoInstitucionalId) {
+                <li>
+                  {{ r.nombre }}
+                  <span class="etiqueta-estado" [class.estado-alerta]="r.obligatorio" [class.estado-neutro]="!r.obligatorio">{{ r.obligatorio ? 'Obligatorio' : 'Recomendado' }}</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="texto-secundario texto-pequeno">Este tipo no pide documentos específicos.</p>
+          }
+        </div>
+      }
+
       <h2>Documentos</h2>
       <p class="texto-secundario texto-pequeno">
-        Archivos PDF, PNG o JPG de hasta 5 MB cada uno. Se guardan en el almacén privado de la universidad y solo los
-        descargan el titular y la coordinación.
+        Por cada documento, sube un archivo PDF, PNG o JPG (hasta 5 MB cada uno y 25 MB por expediente) o pega el enlace
+        de SharePoint u OneDrive de la universidad. Los archivos se guardan en el almacén privado y solo los descargan el
+        titular y la coordinación.
       </p>
       @if (documentos.hasError('archivoRepetido')) {
         <p class="mensaje mensaje-error" role="alert">Hay archivos con el mismo nombre entre los documentos.</p>
@@ -62,7 +111,8 @@
           <thead>
             <tr>
               <th>Documento</th>
-              <th>Archivo</th>
+              <th>Tipo</th>
+              <th>Archivo o enlace</th>
               <th class="col-acciones"><span class="visualmente-oculto">Quitar</span></th>
             </tr>
           </thead>
@@ -71,18 +121,46 @@
               <tr [formGroupName]="i">
                 <td>
                   <label class="visualmente-oculto" [for]="'doc-nombre-' + i">Nombre del documento {{ i + 1 }}</label>
-                  <input [id]="'doc-nombre-' + i" type="text" formControlName="nombre" maxlength="150" placeholder="DNI escaneado" />
+                  <input [id]="'doc-nombre-' + i" type="text" formControlName="nombre" maxlength="150" placeholder="FUT firmado" />
                   @if (mensajeLinea(i, 'nombre'); as m) {
                     <span class="error-campo">{{ m }}</span>
                   }
                 </td>
                 <td>
-                  <label class="visualmente-oculto" [for]="'doc-archivo-' + i">Archivo del documento {{ i + 1 }}</label>
-                  <input [id]="'doc-archivo-' + i" type="file" [accept]="acepta" (change)="elegirArchivo(i, $event)" />
-                  @if (linea.controls.archivo.value; as archivo) {
-                    <span class="texto-pequeno texto-secundario">{{ archivo.name }} · {{ tamanoLegible(archivo.size) }}</span>
+                  <label class="visualmente-oculto" [for]="'doc-tipo-' + i">Tipo del documento {{ i + 1 }}</label>
+                  <select [id]="'doc-tipo-' + i" formControlName="tipoDocumentoInstitucionalId">
+                    <option [ngValue]="null">Tipo</option>
+                    @for (t of tiposDocumento(); track t.id) {
+                      <option [ngValue]="t.id">{{ t.nombre }}</option>
+                    }
+                  </select>
+                  @if (mensajeLinea(i, 'tipoDocumentoInstitucionalId'); as m) {
+                    <span class="error-campo">{{ m }}</span>
                   }
-                  @if (mensajeLinea(i, 'archivo'); as m) {
+                </td>
+                <td>
+                  <fieldset class="origen-documento">
+                    <legend class="visualmente-oculto">Contenido del documento {{ i + 1 }}</legend>
+                    <label><input type="radio" formControlName="origen" value="archivo" [id]="'doc-origen-archivo-' + i" /> Archivo</label>
+                    <label><input type="radio" formControlName="origen" value="enlace" [id]="'doc-origen-enlace-' + i" /> Enlace de SharePoint</label>
+                  </fieldset>
+                  @if (linea.controls.origen.value === 'archivo') {
+                    <label class="visualmente-oculto" [for]="'doc-archivo-' + i">Archivo del documento {{ i + 1 }}</label>
+                    <input [id]="'doc-archivo-' + i" type="file" [accept]="acepta" (change)="elegirArchivo(i, $event)" />
+                    @if (linea.controls.archivo.value; as archivo) {
+                      <span class="texto-pequeno texto-secundario">{{ archivo.name }} · {{ tamanoLegible(archivo.size) }}</span>
+                    }
+                  } @else {
+                    <label class="visualmente-oculto" [for]="'doc-enlace-' + i">Enlace del documento {{ i + 1 }}</label>
+                    <input
+                      [id]="'doc-enlace-' + i"
+                      type="url"
+                      formControlName="enlace"
+                      maxlength="1000"
+                      placeholder="https://upeuedupe.sharepoint.com/…"
+                    />
+                  }
+                  @if (mensajeLinea(i, 'contenido'); as m) {
                     <span class="error-campo">{{ m }}</span>
                   }
                 </td>

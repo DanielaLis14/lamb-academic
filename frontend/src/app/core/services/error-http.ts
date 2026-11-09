@@ -37,6 +37,7 @@ export function mensajeHttp(err: HttpErrorResponse, generico: string): string {
       return cuerpo?.message ?? 'Los datos enviados no son válidos.';
     case 404:
     case 409:
+    case 422:
       return cuerpo?.message ?? generico;
     default:
       return cuerpo?.traceId ? `${generico} (código de rastreo ${cuerpo.traceId})` : generico;

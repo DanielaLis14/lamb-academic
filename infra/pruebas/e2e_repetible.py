@@ -267,18 +267,42 @@ def escenario():
                                         "5 alumnos ordenados por nombre"))
 
     # Base Universal: expediente cabecera-detalle + rollback
+    # Catalogos de tramite (V5), por codigo. Constancia de estudios exige FUT y voucher.
+    categorias = {c["codigo"]: c["id"] for c in llamar("GET", "/api/v1/expedientes/catalogos/categorias")[1]}
+    tipos = {t["codigo"]: t["id"] for t in llamar(
+        "GET", f"/api/v1/expedientes/catalogos/categorias/{categorias['CONSTANCIAS']}/tipos-solicitud")[1]}
+    docs = {d["codigo"]: d["id"] for d in llamar("GET", "/api/v1/expedientes/catalogos/tipos-documento")[1]}
+    constancia = {"categoriaId": categorias["CONSTANCIAS"], "tipoSolicitudId": tipos["CONSTANCIA_ESTUDIOS"],
+                  "personaId": ana_persona}
     exp = caso("Base Universal", "Expediente con 2 documentos (cabecera-detalle)", "POST", "/api/v1/expedientes", 201, {
-        "codigoTramite": f"E2E-EXP-{SUF}", "asunto": "Constancia", "personaId": ana_persona, "documentos": [
-            {"nombre": "DNI", "nombreArchivo": "dni.pdf", "tipoDocumento": "PDF", "rutaArchivo": "/e2e/dni.pdf"},
-            {"nombre": "Foto", "nombreArchivo": "foto.jpg", "tipoDocumento": "JPG", "rutaArchivo": "/e2e/foto.jpg"}]},
-        verificar=lambda b, h: afirmar(b["totalDocumentos"] == 2, "totalDocumentos=2"))
+        **constancia, "asunto": "Constancia", "documentos": [
+            {"nombre": "FUT", "tipoDocumentoInstitucionalId": docs["FUT"], "nombreArchivo": "fut.pdf",
+             "tipoDocumento": "PDF", "rutaArchivo": "/e2e/fut.pdf"},
+            {"nombre": "Voucher", "tipoDocumentoInstitucionalId": docs["VOUCHER"], "nombreArchivo": "voucher.jpg",
+             "tipoDocumento": "JPG", "rutaArchivo": "/e2e/voucher.jpg"}]},
+        verificar=lambda b, h: afirmar(b["totalDocumentos"] == 2 and b["codigoTramite"].startswith("TR-"),
+                                       "totalDocumentos=2 y codigo TR- generado"))
     creados["expediente"].append(exp["id"])
     caso("Base Universal", "Expediente con archivo inconsistente: rollback (409)", "POST", "/api/v1/expedientes", 409, {
-        "codigoTramite": f"E2E-EXR-{SUF}", "asunto": "Rollback", "personaId": ana_persona, "documentos": [
-            {"nombre": "Ok", "nombreArchivo": "ok.pdf", "tipoDocumento": "PDF", "rutaArchivo": "/e2e/ok.pdf"},
-            {"nombre": "Mal", "nombreArchivo": "mal.png", "tipoDocumento": "PDF", "rutaArchivo": "/e2e/mal.png"}]})
+        **constancia, "tipoSolicitudId": tipos["CERTIFICADO_ESTUDIOS"], "asunto": "Rollback", "documentos": [
+            {"nombre": "FUT", "tipoDocumentoInstitucionalId": docs["FUT"], "nombreArchivo": "ok.pdf",
+             "tipoDocumento": "PDF", "rutaArchivo": "/e2e/ok.pdf"},
+            {"nombre": "Mal", "tipoDocumentoInstitucionalId": docs["VOUCHER"], "nombreArchivo": "mal.png",
+             "tipoDocumento": "PDF", "rutaArchivo": "/e2e/mal.png"}]})
     caso("Base Universal", "Rollback verificado: la cabecera no quedo", "GET", f"/api/v1/expedientes?personaId={ana_persona}",
-         200, verificar=lambda b, h: afirmar([x["codigoTramite"] for x in b] == [f"E2E-EXP-{SUF}"], "solo EXP"))
+         200, verificar=lambda b, h: afirmar([x["codigoTramite"] for x in b] == [exp["codigoTramite"]], "solo EXP"))
+    caso("Base Universal", "Otro expediente del mismo tipo en curso: 409 con el codigo existente", "POST",
+         "/api/v1/expedientes", 409, {**constancia, "asunto": "Duplicado", "documentos": [
+             {"nombre": "FUT", "tipoDocumentoInstitucionalId": docs["FUT"], "nombreArchivo": "fut.pdf",
+              "tipoDocumento": "PDF", "rutaArchivo": "/e2e/fut.pdf"},
+             {"nombre": "Voucher", "tipoDocumentoInstitucionalId": docs["VOUCHER"], "nombreArchivo": "v.pdf",
+              "tipoDocumento": "PDF", "rutaArchivo": "/e2e/v.pdf"}]},
+         verificar=lambda b, h: afirmar(exp["codigoTramite"] in b["message"], "nombra el expediente existente"))
+    caso("Base Universal", "Faltan documentos obligatorios (422)", "POST", "/api/v1/expedientes", 422, {
+        **constancia, "tipoSolicitudId": tipos["CERTIFICADO_ESTUDIOS"], "asunto": "Incompleto", "documentos": [
+            {"nombre": "FUT", "tipoDocumentoInstitucionalId": docs["FUT"], "nombreArchivo": "fut.pdf",
+             "tipoDocumento": "PDF", "rutaArchivo": "/e2e/fut.pdf"}]},
+        verificar=lambda b, h: afirmar("Voucher de pago" in b["message"], "nombra el voucher"))
     caso("Base Universal", "Flujo de estado del expediente", "PATCH", f"/api/v1/expedientes/{exp['id']}/estado", 200,
          {"estado": "EN_REVISION"})
 

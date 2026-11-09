@@ -86,6 +86,7 @@ public class SecurityConfig {
                                 "/api/v1/escuelas/**", "/api/v1/institucional/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/personas/**", "/api/v1/alumnos/**")
                             .hasAnyRole(COORDINADOR, ADMIN, CAJERO)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/expedientes/catalogos/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/expedientes/resumen").hasAnyRole(COORDINADOR, ADMIN)
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/expedientes/*/estado").hasAnyRole(COORDINADOR, ADMIN)
                         .requestMatchers(HttpMethod.GET, "/api/v1/expedientes/**").hasAnyRole(ESTUDIANTE, COORDINADOR, ADMIN)

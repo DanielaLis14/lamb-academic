@@ -10,32 +10,33 @@ import { mensajeHttp } from '../../../core/services/error-http';
 import { alMenosUnaLinea } from '../../../shared/validadores';
 import { Persona } from '../persona/persona.model';
 import { PersonaService } from '../persona/persona-service';
-import { problemaArchivo, tamanoLegible } from './documento-form';
-import { ACEPTA_ARCHIVO, MAX_DOCUMENTOS } from './expediente.model';
+import { OrigenDocumento, problemaArchivo, problemaEnlace, tamanoLegible } from './documento-form';
+import { ACEPTA_ARCHIVO, Catalogo, MAX_DOCUMENTOS, TipoSolicitud } from './expediente.model';
 import { ExpedienteService } from './expediente-service';
 
-function codigoSugerido(): string {
-  const d = new Date();
-  const dos = (n: number) => String(n).padStart(2, '0');
-  return `EXP-${d.getFullYear()}${dos(d.getMonth() + 1)}${dos(d.getDate())}-${dos(d.getHours())}${dos(d.getMinutes())}${dos(d.getSeconds())}`;
+/** Cada linea tiene un archivo valido o un enlace institucional, segun su origen. */
+function contenidoValido(linea: AbstractControl): ValidationErrors | null {
+  const origen = linea.get('origen')?.value as OrigenDocumento;
+  const problema =
+    origen === 'enlace'
+      ? problemaEnlace(linea.get('enlace')?.value as string)
+      : problemaArchivo(linea.get('archivo')?.value as File | null);
+  return problema ? { contenido: problema } : null;
 }
 
-function archivoValido(control: AbstractControl): ValidationErrors | null {
-  const problema = problemaArchivo(control.value as File | null);
-  return problema ? { archivo: problema } : null;
-}
-
-/** Ningun nombre de archivo se repite entre las lineas (el backend aplica la misma regla). */
+/** Ningun nombre de archivo se repite entre las lineas con archivo (el backend aplica la misma regla). */
 function archivosDistintos(control: AbstractControl): ValidationErrors | null {
-  const nombres = (control.value as { archivo: File | null }[])
+  const nombres = (control.value as { origen: OrigenDocumento; archivo: File | null }[])
+    .filter((l) => l.origen === 'archivo')
     .map((l) => l.archivo?.name.toLowerCase())
     .filter(Boolean);
   return new Set(nombres).size !== nombres.length ? { archivoRepetido: true } : null;
 }
 
 /**
- * Registro transaccional Expediente + DocumentoAdjunto con archivos reales en una sola peticion: si un
- * archivo no es valido, el backend no guarda la cabecera, ni los documentos, ni ningun archivo.
+ * Registro transaccional Expediente + DocumentoAdjunto en una sola peticion, con archivos reales o enlaces de
+ * SharePoint: si un documento no es valido o faltan requisitos, el backend no guarda nada. El codigo de tramite
+ * lo asigna el servidor.
  */
 @Component({
   selector: 'app-expediente-form',
@@ -56,17 +57,36 @@ export class ExpedienteForm {
   protected readonly maxDocumentos = MAX_DOCUMENTOS;
   protected readonly tamanoLegible = tamanoLegible;
   protected readonly personas = signal<Persona[]>([]);
+  protected readonly categorias = signal<Catalogo[]>([]);
+  protected readonly tipos = signal<TipoSolicitud[]>([]);
+  protected readonly destinatarios = signal<Catalogo[]>([]);
+  protected readonly tiposDocumento = signal<Catalogo[]>([]);
+  protected readonly tipoElegido = signal<TipoSolicitud | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly guardando = signal(false);
 
   protected readonly form = this.fb.group({
-    codigoTramite: this.fb.nonNullable.control(codigoSugerido(), [Validators.required, Validators.maxLength(50)]),
     asunto: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(255)]),
     personaId: this.fb.control<number | null>(null),
+    categoriaId: this.fb.control<number | null>(null, Validators.required),
+    tipoSolicitudId: this.fb.control<number | null>(null, Validators.required),
+    destinatarioId: this.fb.control<number | null>(null, Validators.required),
     documentos: this.fb.array([this.linea()], [alMenosUnaLinea, archivosDistintos]),
   });
 
   constructor() {
+    this.expedienteService.categorias().subscribe({
+      next: (data) => this.categorias.set(data),
+      error: (err: HttpErrorResponse) => this.error.set(mensajeHttp(err, 'No se pudieron cargar las categorías.')),
+    });
+    this.expedienteService.tiposDocumento().subscribe({
+      next: (data) => this.tiposDocumento.set(data),
+      error: (err: HttpErrorResponse) => this.error.set(mensajeHttp(err, 'No se pudieron cargar los tipos de documento.')),
+    });
+    this.expedienteService.destinatarios().subscribe({
+      next: (data) => this.destinatarios.set(data),
+      error: (err: HttpErrorResponse) => this.error.set(mensajeHttp(err, 'No se pudieron cargar los destinatarios.')),
+    });
     if (this.esCoordinacion()) {
       this.form.controls.personaId.addValidators(Validators.required);
       this.personaService.buscar({ activo: true }).subscribe({
@@ -74,6 +94,8 @@ export class ExpedienteForm {
         error: (err: HttpErrorResponse) => this.error.set(mensajeHttp(err, 'No se pudieron cargar las personas.')),
       });
     }
+    this.form.controls.categoriaId.valueChanges.subscribe((id) => this.elegirCategoria(id));
+    this.form.controls.tipoSolicitudId.valueChanges.subscribe((id) => this.elegirTipo(id));
   }
 
   protected get documentos() {
@@ -81,10 +103,33 @@ export class ExpedienteForm {
   }
 
   private linea() {
-    return this.fb.group({
-      nombre: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(150)]),
-      archivo: this.fb.control<File | null>(null, archivoValido),
+    return this.fb.group(
+      {
+        nombre: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(150)]),
+        tipoDocumentoInstitucionalId: this.fb.control<number | null>(null, Validators.required),
+        origen: this.fb.nonNullable.control<OrigenDocumento>('archivo'),
+        archivo: this.fb.control<File | null>(null),
+        enlace: this.fb.nonNullable.control(''),
+      },
+      { validators: contenidoValido },
+    );
+  }
+
+  private elegirCategoria(id: number | null): void {
+    this.tipos.set([]);
+    this.form.controls.tipoSolicitudId.setValue(null);
+    if (id === null) return;
+    this.expedienteService.tiposSolicitud(id).subscribe({
+      next: (data) => this.tipos.set(data),
+      error: (err: HttpErrorResponse) => this.error.set(mensajeHttp(err, 'No se pudieron cargar los tipos de solicitud.')),
     });
+  }
+
+  /** El destinatario se propone con el sugerido del tipo; se puede cambiar. */
+  private elegirTipo(id: number | null): void {
+    const tipo = this.tipos().find((t) => t.id === id) ?? null;
+    this.tipoElegido.set(tipo);
+    this.form.controls.destinatarioId.setValue(tipo?.destinatarioSugerido?.id ?? null);
   }
 
   agregarLinea(): void {
@@ -117,12 +162,18 @@ export class ExpedienteForm {
     this.expedienteService
       .registrarConArchivos(
         {
-          codigoTramite: v.codigoTramite.trim(),
           asunto: v.asunto.trim(),
           personaId: this.esCoordinacion() ? v.personaId : null,
-          nombres: v.documentos.map((d) => d.nombre.trim()),
+          categoriaId: v.categoriaId as number,
+          tipoSolicitudId: v.tipoSolicitudId as number,
+          destinatarioId: v.destinatarioId,
+          documentos: v.documentos.map((d) => ({
+            nombre: d.nombre.trim(),
+            tipoDocumentoInstitucionalId: d.tipoDocumentoInstitucionalId as number,
+            enlace: d.origen === 'enlace' ? d.enlace.trim() : null,
+          })),
         },
-        v.documentos.map((d) => d.archivo as File),
+        v.documentos.filter((d) => d.origen === 'archivo').map((d) => d.archivo as File),
       )
       .subscribe({
         next: (e) => {
@@ -140,7 +191,7 @@ export class ExpedienteForm {
       });
   }
 
-  protected mensaje(campo: 'codigoTramite' | 'asunto' | 'personaId'): string {
+  protected mensaje(campo: 'asunto' | 'personaId' | 'categoriaId' | 'tipoSolicitudId' | 'destinatarioId'): string {
     const control = this.form.controls[campo];
     if (!control.touched) return '';
     if (control.hasError('required')) return 'Este campo es obligatorio.';
@@ -148,10 +199,15 @@ export class ExpedienteForm {
     return '';
   }
 
-  protected mensajeLinea(indice: number, campo: 'nombre' | 'archivo'): string {
-    const control = this.documentos.at(indice).controls[campo];
+  protected mensajeLinea(indice: number, campo: 'nombre' | 'tipoDocumentoInstitucionalId' | 'contenido'): string {
+    const linea = this.documentos.at(indice);
+    if (campo === 'contenido') {
+      const tocado = linea.controls.archivo.touched || linea.controls.enlace.touched;
+      return tocado ? ((linea.getError('contenido') as string | null) ?? '') : '';
+    }
+    const control = linea.controls[campo];
     if (!control.touched) return '';
-    if (campo === 'archivo') return control.getError('archivo') ?? '';
+    if (campo === 'tipoDocumentoInstitucionalId') return control.hasError('required') ? 'Elige el tipo de documento.' : '';
     if (control.hasError('required')) return 'Indica el nombre del documento.';
     if (control.hasError('maxlength')) return 'Máximo 150 caracteres.';
     return '';

@@ -11,6 +11,7 @@ import pe.edu.upeu.lambacademic.baseuniversal.expediente.entity.EstadoExpediente
 import pe.edu.upeu.lambacademic.baseuniversal.expediente.entity.Expediente;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,8 +21,8 @@ public interface ExpedienteRepository extends JpaRepository<Expediente, Long> {
     @Query("""
             SELECT new pe.edu.upeu.lambacademic.baseuniversal.expediente.dto.ExpedienteResumen(
                 e.id, e.codigoTramite, e.asunto, e.fechaRegistro, e.estado, e.totalDocumentos,
-                p.id, CONCAT(p.apellidoPaterno, ' ', p.nombres))
-            FROM Expediente e JOIN e.persona p
+                p.id, CONCAT(p.apellidoPaterno, ' ', p.nombres), t.nombre)
+            FROM Expediente e JOIN e.persona p LEFT JOIN e.tipoSolicitud t
             WHERE (:idPersona IS NULL OR p.id = :idPersona)
               AND (:estado IS NULL OR e.estado = :estado)
               AND (:desde IS NULL OR e.fechaRegistro >= :desde)
@@ -33,10 +34,17 @@ public interface ExpedienteRepository extends JpaRepository<Expediente, Long> {
                                    @Param("hasta") LocalDateTime hasta,
                                    Sort sort);
 
-    @EntityGraph(attributePaths = {"persona", "documentos"})
+    @EntityGraph(attributePaths = {"persona", "documentos", "documentos.tipoDocumentoInstitucional", "categoria",
+            "tipoSolicitud", "destinatario"})
     Optional<Expediente> findDetalladoById(Long id);
 
-    boolean existsByCodigoTramite(String codigoTramite);
+    /** Expedientes del titular con el mismo tipo de solicitud en los estados indicados (regla de duplicado). */
+    List<Expediente> findByPersonaIdAndTipoSolicitudIdAndEstadoIn(Long personaId, Long tipoSolicitudId,
+                                                                   Collection<EstadoExpediente> estados);
+
+    /** Numero correlativo del codigo de tramite TR-AAAA-NNNNN (secuencia SEQ_CODIGO_TRAMITE de V5). */
+    @Query(value = "SELECT SEQ_CODIGO_TRAMITE.NEXTVAL FROM DUAL", nativeQuery = true)
+    Long siguienteNumeroTramite();
 
     /** Agregado por estado: cantidad de expedientes y documentos. */
     @Query("""

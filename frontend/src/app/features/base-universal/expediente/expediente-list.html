@@ -77,7 +77,12 @@
             @for (e of expedientes(); track e.id) {
               <tr>
                 <td class="celda-principal num">{{ e.codigoTramite }}</td>
-                <td>{{ e.asunto }}</td>
+                <td>
+                  {{ e.asunto }}
+                  @if (e.tipoSolicitudNombre) {
+                    <span class="texto-pequeno texto-secundario">· {{ e.tipoSolicitudNombre }}</span>
+                  }
+                </td>
                 @if (esCoordinacion()) {
                   <td>{{ e.personaNombre }}</td>
                 }

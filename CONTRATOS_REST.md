@@ -28,7 +28,7 @@ Este documento compara contra el código original de cada aporte (ZIP de los com
 | `GET /api/v1/alumnos` | `AlumnoDto {id, codigoEstudiante, estado, personaId}` | `AlumnoResponse {id, codigoEstudiante, estado (ACTIVO/SUSPENDIDO/RETIRADO/EGRESADO), fechaIngreso, habilitado, persona {id, numeroDocumento, nombreCompleto, email, idEscuela, escuelaNombre}}`; filtros `estado, idEscuela, q` | `personaId` pasa a `persona.id` |
 | `POST /api/v1/alumnos` | `{codigoEstudiante, estado, personaId}` sin validar | `{personaId*, codigoEstudiante* (A-Z0-9-, 4–20), fechaIngreso*}`; el estado inicial es ACTIVO; la persona debe ser de tipo ALUMNO (409) | Quitar `estado`; agregar `fechaIngreso` |
 | — | — | Nuevos: `GET /{id}`, `PUT /{id}`, `PATCH /{id}/estado`, `GET /resumen` | — |
-| `GET/POST /api/v1/expedientes` y `POST /api/v1/expedientes/con-documentos` | Entidad expuesta; dos DTO distintos (`codigoExpediente/observacion` y `codigoTramite/asunto`) | Un solo `POST /api/v1/expedientes {codigoTramite*, asunto*, personaId*, documentos* (1–20) [{nombre*, nombreArchivo*, tipoDocumento* (PDF/JPG/PNG/DOCX), rutaArchivo*}]}` → `ExpedienteResponse` con `persona` y `documentos`. `GET` devuelve `ExpedienteResumen` (sin documentos) con filtros `personaId, estado, desde, hasta` | Usar el formato `codigoTramite/asunto`; la extensión del archivo debe coincidir con el tipo |
+| `GET/POST /api/v1/expedientes` y `POST /api/v1/expedientes/con-documentos` | Entidad expuesta; dos DTO distintos (`codigoExpediente/observacion` y `codigoTramite/asunto`) | Un solo `POST /api/v1/expedientes {codigoTramite*, asunto*, personaId*, documentos* (1–20) [{nombre*, nombreArchivo*, tipoDocumento* (PDF/JPG/PNG/DOCX), rutaArchivo*}]}` → `ExpedienteResponse` con `persona` y `documentos`. `GET` devuelve `ExpedienteResumen` (sin documentos) con filtros `personaId, estado, desde, hasta` | Usar el formato `codigoTramite/asunto`; la extensión del archivo debe coincidir con el tipo. **Desde V5 cambió: ver §8** (el código lo genera el servidor) |
 | `GET/POST /api/v1/documento-adjunto` | Lista global de la entidad; alta suelta | **Reemplazado** por `GET/POST /api/v1/expedientes/{id}/documentos` | Cambiar URL; el documento siempre pertenece a un expediente |
 | — | — | Nuevos: `GET /{id}`, `PATCH /{id}/estado` (flujo REGISTRADO→EN_REVISION→OBSERVADO/APROBADO→ARCHIVADO), `GET /resumen` | — |
 
@@ -100,3 +100,64 @@ Este documento compara contra el código original de cada aporte (ZIP de los com
 | Nuevo | `GET /api/v1/auth/perfil` → `{sub, usuario, nombre, email, roles, alumnoId}` | Lectura del token, sin base de datos |
 | CORS | Ahora lo aplica Spring Security (preflight sin token); orígenes en `lamb.cors.allowed-origins` | Sin cambio para `http://localhost:4200` |
 | Trazabilidad | `X-Trace-ID` también en las respuestas 401/403 | — |
+
+## 8. Expedientes con catálogos de trámite (migración V5)
+
+Requiere `infra/oracle/V5__catalogos_expediente.sql`. Los expedientes y documentos registrados antes de V5 se
+conservan: sus campos nuevos llegan en `null` y no se les exigen requisitos.
+
+**Catálogos (lectura para cualquier sesión, incluidos DOCENTE y CAJERO; sin token, 401).** Solo registros activos.
+
+| Método y ruta | Respuesta |
+|---|---|
+| `GET /api/v1/expedientes/catalogos/categorias` | `[{id, codigo, nombre, descripcion}]` |
+| `GET /api/v1/expedientes/catalogos/categorias/{id}/tipos-solicitud` | `[{id, codigo, nombre, descripcion, categoriaId, destinatarioSugerido {id, codigo, nombre} o null si está inactivo, requisitos [{tipoDocumentoInstitucionalId, codigo, nombre, obligatorio}]}]`. 404 si la categoría no existe; lista vacía si está inactiva |
+| `GET /api/v1/expedientes/catalogos/destinatarios` | `[{id, codigo, nombre, descripcion}]` |
+| `GET /api/v1/expedientes/catalogos/tipos-documento` | `[{id, codigo, nombre, descripcion}]` |
+
+**Registro.**
+
+| Cambio | Contrato actual |
+|---|---|
+| `POST /api/v1/expedientes` (JSON) | `{asunto*, personaId (solo personal), categoriaId*, tipoSolicitudId*, destinatarioId (opcional: sin valor, el sugerido del tipo), documentos* (1–20)}`. **Se quitó `codigoTramite`**: si se envía, se ignora |
+| `POST /api/v1/expedientes` (multipart) | Parte `datos`: `{asunto*, personaId, categoriaId*, tipoSolicitudId*, destinatarioId, documentos* [{nombre*, tipoDocumentoInstitucionalId*, enlace}]}`. Partes `archivos`: una por cada documento **sin** enlace, en el mismo orden. Si todos los documentos tienen enlace, no se envían archivos. **Se quitaron `codigoTramite` y `nombres`** |
+| Código de trámite | Lo genera el servidor con `SEQ_CODIGO_TRAMITE`: `TR-AAAA-NNNNN` (año del registro) |
+| Documento por metadatos (`DocumentoAdjuntoRequest`) | `{nombre*, tipoDocumentoInstitucionalId*, nombreArchivo, tipoDocumento, rutaArchivo, enlace}`: ruta declarada (los tres campos de archivo) **o** enlace, no ambos |
+| `POST /api/v1/expedientes/{id}/documentos` (multipart) | Partes `nombre*`, `tipoDocumentoInstitucionalId*` y **una** de `archivo` o `enlace` |
+| `PUT /api/v1/expedientes/{id}/documentos/{docId}` | Exige `tipoDocumentoInstitucionalId`. Con archivo cargado solo cambian `nombre` y el tipo institucional; con ruta declarada o enlace también su contenido (puede pasar de ruta a enlace) |
+
+**Respuestas (solo campos nuevos).**
+- `ExpedienteResponse`: `categoria`, `tipoSolicitud` y `destinatario`, cada uno `{id, codigo, nombre}` o `null`.
+- `ExpedienteResumen`: `tipoSolicitudNombre`.
+- `DocumentoAdjuntoResponse`:
+  - `tipoDocumentoInstitucional` `{id, codigo, nombre}`;
+  - `enlace`;
+  - `tamanoBytes` (solo archivos cargados después de V5);
+  - `tipoDocumento` y `rutaArchivo` son `null` en un documento con enlace.
+
+**Enlaces de SharePoint.**
+- Solo `https://upeuedupe.sharepoint.com/...` y `https://upeuedupe-my.sharepoint.com/...`, sin usuario ni puerto y
+  de hasta 1000 caracteres. Nunca el prefijo `almacen:`.
+- Se valida en el frontend, en el backend y en Oracle (`CK_DOCUMENTOS_ORIGEN`).
+- Un documento con enlace no cuenta para los 25 MB.
+- No se descarga por `GET .../archivo` (responde 404); en el detalle se abre con «Abrir en SharePoint».
+
+**Reglas y códigos de respuesta.**
+
+| Situación | Código | Mensaje (ejemplo) |
+|---|---|---|
+| Categoría, tipo, destinatario o tipo de documento inexistente | 404 | `Tipo de solicitud no encontrado: 99` |
+| Categoría, tipo, destinatario o tipo de documento inactivo | 409 | `El tipo de documento Voucher de pago esta inactivo` |
+| Otro expediente del mismo tipo y titular en REGISTRADO, EN_REVISION u OBSERVADO | 409 | `Ya existe el expediente TR-2026-00007 de Retiro de curso en estado OBSERVADO para este titular...` |
+| El tipo de solicitud no pertenece a la categoría | **422** | `El tipo de solicitud Retiro de curso no pertenece a la categoria Tramites economicos` |
+| Faltan documentos obligatorios (al registrar) | **422** | `Faltan documentos obligatorios para Examen rezagado: FUT, Voucher de pago` |
+| Quitar o cambiar el tipo del único documento obligatorio | **422** | `El expediente debe conservar los documentos obligatorios de Examen rezagado. Faltaria: FUT` |
+| Más de 25 MB de archivos en el expediente (además de 5 MB por archivo) | 409 | `Los archivos del expediente sumarian 26.0 MB y el maximo es 25.0 MB por expediente...` |
+| Enlace no institucional, prefijo `almacen:`, archivo y enlace a la vez o ninguno | 409 | `El enlace debe ser de SharePoint u OneDrive de la universidad...` |
+| Petición multipart de más de 30 MB | 413 | `Los archivos superan el tamano permitido` |
+
+- **422 (`SolicitudIncompletaException`).** La solicitud está bien formada pero no se puede atender tal como llegó,
+  y fallaría igual en cualquier momento.
+- **409.** Sigue indicando un conflicto con el estado actual de los datos.
+- **Requisitos.** Solo cuentan los obligatorios cuyo tipo de documento está activo, y se cumplen igual con archivo o
+  con enlace.

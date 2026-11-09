@@ -23,7 +23,11 @@ servicio se duplicó: cada aporte se adaptó a los contratos que ya existían.
   - Se tomaron las reglas de dueño de INTEGRACION.md: el estudiante registra a su nombre y recibe 403 sobre un expediente ajeno.
   - Se tomaron también la corrección y el retiro de documentos mientras el expediente está Registrado u Observado.
   - Las pantallas se rehicieron con el sistema visual de LAMB.
-  - **No se incorporó** la migración V5 de catálogos (categoría, destinatario, tamaño). Cambia el esquema y queda pendiente de autorización.
+  - **Migración V5 de catálogos de trámite**, ver sección 10:
+    - categoría, tipo de solicitud, destinatario y requisitos;
+    - código TR-AAAA-NNNNN generado por el servidor;
+    - 25 MB por expediente;
+    - enlaces de SharePoint junto con la carga de archivos.
   - **Carga real de archivos** (PDF, PNG, JPG; 5 MB por archivo), ver sección 8. Los documentos registrados antes conservan solo su ruta declarada.
 - **Core Currículo.**
   - Se integraron las mallas curriculares (listado con filtros, alta transaccional, detalle por ciclo y versionado) y la estructura institucional.
@@ -96,7 +100,10 @@ LAMB_API_URL=http://localhost:8091 LAMB_KEYCLOAK_URL=http://localhost:48090 pyth
 
 ## 7. Pendiente
 
-- Migración V5 de expedientes, solo tras autorización y probada antes en la base aislada.
+- Migración V5 de expedientes: el código está listo (sección 10). Falta probarla contra Oracle en la base aislada
+  (huella, V5, rollback, huella, V5) y aplicarla en desarrollo, solo con autorización.
+- Expedientes: en el formulario, cálculo en vivo del tamaño total y de «requisitos X de Y», y preselección del
+  requisito que falta.
 - Registro de resultados de curso por el docente (hoy lo hace coordinación).
 
 ## 8. Pulido visual y carga de archivos
@@ -150,3 +157,82 @@ LAMB_API_URL=http://localhost:8091 LAMB_KEYCLOAK_URL=http://localhost:48090 pyth
 | Instalación desde el ZIP, tras una matrícula de Ana y otra de José: `matriz_accesos.py` / `verificar_docente.py` | 27/27, 47/47 |
 | Instalación desde el ZIP: `e2e_integracion.py` / `e2e_archivos_persistencia.py` | 48/48, 39/39 |
 | Instalación desde el ZIP: prerrequisito, cruce de horario, vacantes y matrícula duplicada | correcto |
+
+## 10. Base Universal: migración V5 de expedientes (catálogos de trámite)
+
+**Base de datos (`V5__catalogos_expediente.sql`, reversión `V5__rollback.sql`).**
+- **Catálogos.** `CATEGORIAS_TRAMITE`, `TIPOS_SOLICITUD` (cada tipo con su categoría y su destinatario sugerido),
+  `DESTINATARIOS` y `TIPOS_DOCUMENTO_INSTITUCIONAL`.
+- **Requisitos.** `REQUISITOS_TIPO_SOLICITUD` relaciona cada tipo de solicitud con sus tipos de documento (PK
+  compuesta y FK a ambas tablas). `OBLIGATORIO` = 1 indica que se exige y 0 que solo se recomienda.
+- **Columnas nuevas, todas nullable.**
+  - En `EXPEDIENTES`: categoría, tipo de solicitud y destinatario.
+  - En `DOCUMENTOS_ADJUNTOS`: tipo de documento institucional, `TAMANO_BYTES` y `ENLACE`.
+  - `TIPO_DOCUMENTO` y `RUTA_ARCHIVO` pasan a admitir NULL, solo para los documentos con enlace
+    (`CK_DOCUMENTOS_ORIGEN`: archivo **o** enlace institucional).
+- **Registros anteriores.** Los expedientes y documentos que ya existían no cambian.
+- **Código de trámite.** `SEQ_CODIGO_TRAMITE` empieza después del mayor `TR-AAAA-NNNNN` que ya exista.
+- **Un expediente en curso por tipo.** `UX_EXPEDIENTES_TIPO_EN_CURSO` impide que un titular tenga dos expedientes del
+  mismo tipo en REGISTRADO, EN_REVISION u OBSERVADO, aunque lleguen dos registros a la vez.
+- **Datos iniciales.**
+
+  | Categoría | Tipo de solicitud | Destinatario sugerido | Obligatorios | Recomendados |
+  |---|---|---|---|---|
+  | Académico | Justificación de inasistencias | Coordinación Académica | FUT | Certificado médico |
+  | Académico | Convalidación de cursos | Dirección de Escuela | FUT, Sílabo, Récord de notas, Voucher | — |
+  | Académico | Retiro de curso | Coordinación Académica | FUT | — |
+  | Académico | Examen rezagado | Coordinación Académica | FUT, Voucher | Certificado médico |
+  | Académico | Reserva de matrícula | Secretaría Académica | FUT, Voucher | — |
+  | Económico | Devolución de pago | Tesorería | FUT, DNI, Voucher | — |
+  | Económico | Fraccionamiento de deuda | Tesorería | FUT | — |
+  | Económico | Beca o descuento | Bienestar Universitario | FUT, Récord de notas | Carta de motivos |
+  | Constancias | Constancia de estudios | Secretaría Académica | FUT, Voucher | — |
+  | Constancias | Certificado de estudios | Secretaría Académica | FUT, Voucher | — |
+
+  El DNI solo se pide para la devolución de dinero, porque la sesión ya identifica al estudiante. «Otro documento»
+  existe como tipo y nunca es obligatorio.
+- **Instalación.** `inicializar_base.py` aplica V5 después de V4. Una base que ya existía la recibe a mano, con la
+  orden del README.
+- **Reversión.** `V5__rollback.sql` borra los documentos con enlace (sin la columna `ENLACE` no tienen contenido) y
+  recalcula `TOTAL_DOCUMENTOS`.
+
+**Backend (`baseuniversal/expediente`).**
+- **Catálogos.** `GET /api/v1/expedientes/catalogos/...` para cualquier sesión (`CatalogoExpedienteController`).
+- **Código de trámite.** Lo genera el servidor; se quitó `codigoTramite` del registro JSON y multipart, junto con su
+  validación de duplicado.
+- **Reglas nuevas.**
+  - Los catálogos deben existir (404) y estar activos (409).
+  - El tipo de solicitud debe pertenecer a la categoría (422).
+  - No puede haber otro expediente del mismo tipo en curso (409, con el código del existente).
+  - Deben estar todos los documentos obligatorios (422, con los nombres de los que faltan). La regla también se
+    aplica al quitar un documento o cambiarle el tipo.
+  - Máximo 25 MB por expediente (`lamb.archivos.tamano-maximo-expediente`). En el registro, todas las reglas se
+    revisan antes de guardar el primer archivo.
+- **Excepción nueva.** `SolicitudIncompletaException`, que responde 422 en `GlobalExceptionHandler`.
+- **Enlaces de SharePoint** (`EnlaceSharePoint`). Solo se aceptan `upeuedupe.sharepoint.com` y
+  `upeuedupe-my.sharepoint.com`, sin el prefijo `almacen:`. Un enlace no cuenta para los 25 MB y no se descarga.
+- **Sin cambios.** Los estados y transiciones, las reglas de dueño (persona del token y 403 sobre expedientes
+  ajenos), el almacén (firma, UUID y borrado al revertir) y los roles.
+
+**Frontend.**
+- **Formulario.**
+  - Selectores de categoría y tipo de solicitud. El destinatario se propone con el sugerido y se puede cambiar.
+  - Se muestran los documentos obligatorios y los recomendados.
+  - Cada documento lleva su tipo institucional y, a elección, un archivo o un enlace.
+  - Ya no hay campo de código de trámite.
+- **Detalle.**
+  - Muestra la categoría, el tipo y el destinatario.
+  - Cada documento muestra su tipo y, si es un enlace, un botón «Abrir en SharePoint».
+  - Al agregar un documento se elige archivo o enlace; al corregirlo se cambia según su origen.
+- **Mensajes.** Los errores 422 muestran el mensaje del servidor.
+
+**Scripts e2e.** `e2e_integracion.py`, `e2e_archivos_persistencia.py`, `e2e_repetible.py` y `e2e_demo.py` usan el
+contrato nuevo y buscan los catálogos por código. Cubren las reglas nuevas y archivan sus expedientes al terminar,
+así que se pueden repetir sin chocar con la regla de duplicado.
+
+| Prueba | Resultado |
+|---|---|
+| Backend (`mvnw test`, sin las clases que usan Oracle) | 166/166 (antes 130) |
+| Frontend (`ng test`) | 188/188 (antes 185) |
+| `ng build` | correcto |
+| V5 y su rollback contra Oracle (base aislada), pruebas de integración con Oracle y e2e | **pendiente**: esta computadora no tenía todavía la base aislada del proyecto integrado |

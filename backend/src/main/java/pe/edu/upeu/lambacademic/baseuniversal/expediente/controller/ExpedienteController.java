@@ -59,22 +59,28 @@ public class ExpedienteController {
         return service.registrar(request, personaRestringida(jwt));
     }
 
-    @Operation(summary = "Registra un expediente con archivos reales (PDF, PNG o JPG) en una sola transaccion")
+    @Operation(summary = "Registra un expediente con archivos reales (PDF, PNG o JPG) o enlaces de SharePoint "
+            + "en una sola transaccion; las partes 'archivos' van, en orden, a los documentos sin enlace")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public ExpedienteResponse registrarConArchivos(@Valid @RequestPart("datos") ExpedienteArchivosRequest datos,
-                                                   @RequestPart("archivos") List<MultipartFile> archivos,
+                                                   @RequestPart(value = "archivos", required = false)
+                                                   List<MultipartFile> archivos,
                                                    @AuthenticationPrincipal Jwt jwt) {
         return service.registrarConArchivos(datos, archivos, personaRestringida(jwt));
     }
 
-    @Operation(summary = "Agrega un documento con su archivo a un expediente REGISTRADO u OBSERVADO")
+    @Operation(summary = "Agrega un documento con su archivo o con un enlace de SharePoint a un expediente "
+            + "REGISTRADO u OBSERVADO")
     @PostMapping(value = "/{id}/documentos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public ExpedienteResponse agregarArchivo(@PathVariable Long id, @RequestPart("nombre") String nombre,
-                                             @RequestPart("archivo") MultipartFile archivo,
+                                             @RequestParam("tipoDocumentoInstitucionalId") Long tipoDocumentoInstitucionalId,
+                                             @RequestPart(value = "archivo", required = false) MultipartFile archivo,
+                                             @RequestParam(value = "enlace", required = false) String enlace,
                                              @AuthenticationPrincipal Jwt jwt) {
-        return service.agregarArchivo(id, nombre, archivo, personaRestringida(jwt));
+        return service.agregarArchivo(id, nombre, tipoDocumentoInstitucionalId, archivo, enlace,
+                personaRestringida(jwt));
     }
 
     @Operation(summary = "Descarga el archivo de un documento (titular, coordinacion o administracion)")

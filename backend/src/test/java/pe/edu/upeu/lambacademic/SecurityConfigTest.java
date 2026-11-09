@@ -8,7 +8,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.upeu.lambacademic.baseuniversal.expediente.controller.CatalogoExpedienteController;
 import pe.edu.upeu.lambacademic.baseuniversal.expediente.controller.ExpedienteController;
+import pe.edu.upeu.lambacademic.baseuniversal.expediente.service.CatalogoExpedienteService;
 import pe.edu.upeu.lambacademic.baseuniversal.expediente.service.ExpedienteService;
 import pe.edu.upeu.lambacademic.coreacademico.docente.controller.DocenteController;
 import pe.edu.upeu.lambacademic.coreacademico.docente.service.DocenteService;
@@ -56,7 +58,8 @@ import static pe.edu.upeu.lambacademic.TokensPrueba.estudianteSinAlumno;
  * rol insuficiente 403, rol correcto 2xx, y el filtro por dueno de ESTUDIANTE (ABAC).
  */
 @WebMvcTest({PeriodoController.class, SeccionController.class, MatriculaController.class,
-        CargoController.class, PerfilController.class, DocenteController.class, ExpedienteController.class})
+        CargoController.class, PerfilController.class, DocenteController.class, ExpedienteController.class,
+        CatalogoExpedienteController.class})
 @Import({SecurityConfig.class, CorsConfig.class})
 class SecurityConfigTest {
 
@@ -77,9 +80,11 @@ class SecurityConfigTest {
     @MockitoBean private CargoService cargoService;
     @MockitoBean private DocenteService docenteService;
     @MockitoBean private ExpedienteService expedienteService;
+    @MockitoBean private CatalogoExpedienteService catalogoExpedienteService;
 
     private static final String DOCUMENTO = """
-            {"nombre":"DNI","nombreArchivo":"dni.pdf","tipoDocumento":"PDF","rutaArchivo":"/docs/dni.pdf"}
+            {"nombre":"DNI","tipoDocumentoInstitucionalId":2,"nombreArchivo":"dni.pdf","tipoDocumento":"PDF",
+             "rutaArchivo":"/docs/dni.pdf"}
             """;
 
     @Test
@@ -277,7 +282,8 @@ class SecurityConfigTest {
     @Test
     void cargaYDescargaDeArchivosSiguenLasReglasDelExpediente() throws Exception {
         var datos = new org.springframework.mock.web.MockMultipartFile("datos", "", MediaType.APPLICATION_JSON_VALUE,
-                "{\"codigoTramite\":\"T-1\",\"asunto\":\"x\",\"nombres\":[\"DNI\"]}".getBytes());
+                ("{\"asunto\":\"x\",\"categoriaId\":1,\"tipoSolicitudId\":3,"
+                        + "\"documentos\":[{\"nombre\":\"FUT\",\"tipoDocumentoInstitucionalId\":1}]}").getBytes());
         var archivo = new org.springframework.mock.web.MockMultipartFile("archivos", "dni.pdf", "application/pdf",
                 "%PDF-1.7".getBytes());
         mockMvc.perform(multipart("/api/v1/expedientes").file(datos).file(archivo).with(docente(1207)))
@@ -293,6 +299,21 @@ class SecurityConfigTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/expedientes/9/documentos/31/archivo"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void catalogosDeExpedienteLosConsultaCualquierSesion() throws Exception {
+        mockMvc.perform(get("/api/v1/expedientes/catalogos/categorias")).andExpect(status().isUnauthorized());
+        for (var sesion : List.of(estudiante(1001), coordinador(), admin(), docente(1207), cajero())) {
+            mockMvc.perform(get("/api/v1/expedientes/catalogos/categorias").with(sesion)).andExpect(status().isOk());
+            mockMvc.perform(get("/api/v1/expedientes/catalogos/categorias/1/tipos-solicitud").with(sesion))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get("/api/v1/expedientes/catalogos/destinatarios").with(sesion)).andExpect(status().isOk());
+            mockMvc.perform(get("/api/v1/expedientes/catalogos/tipos-documento").with(sesion)).andExpect(status().isOk());
+        }
+        // Abrir los catalogos no abre los expedientes: el docente sigue sin listarlos.
+        mockMvc.perform(get("/api/v1/expedientes").with(docente(1207))).andExpect(status().isForbidden());
+        verify(expedienteService, never()).personaDeAlumno(any());
     }
 
     @Test

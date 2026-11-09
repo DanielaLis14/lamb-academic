@@ -38,6 +38,12 @@
           <dl class="datos">
             <dt>Estado</dt>
             <dd><app-etiqueta-estado [estado]="e.estado" /></dd>
+            <dt>Tipo de solicitud</dt>
+            <dd>{{ e.tipoSolicitud?.nombre ?? 'Sin tipo (registro anterior)' }}</dd>
+            <dt>Categoría</dt>
+            <dd>{{ e.categoria?.nombre ?? '—' }}</dd>
+            <dt>Destinatario</dt>
+            <dd>{{ e.destinatario?.nombre ?? '—' }}</dd>
             <dt>Titular</dt>
             <dd>{{ e.persona.nombreCompleto }}</dd>
             <dt>Documento</dt>
@@ -55,12 +61,16 @@
         <header><h2>Situación del trámite</h2></header>
         <div class="cuerpo">
           @if (editable()) {
-            <p>Los documentos se pueden corregir, agregar o quitar mientras el expediente esté Registrado u Observado.</p>
+            <p>
+              Los documentos se pueden corregir, agregar o quitar mientras el expediente esté Registrado u Observado,
+              siempre que conserve los obligatorios de su tipo.
+            </p>
           } @else {
             <p>En estado {{ nombreEstado[e.estado] }} los documentos ya no se modifican.</p>
           }
           <p class="texto-secundario texto-pequeno">
-            Los archivos cargados se guardan en el almacén privado de la universidad. Los documentos registrados antes
+            Los archivos cargados se guardan en el almacén privado de la universidad (hasta 25 MB por expediente). Los
+            enlaces de SharePoint se abren en SharePoint y no cuentan para ese límite. Los documentos registrados antes
             de la carga de archivos conservan solo la ruta que se declaró.
           </p>
         </div>
@@ -98,14 +108,33 @@
               } @else {
                 <tr>
                   <td class="celda-principal">{{ d.nombre }}</td>
-                  <td>{{ d.tipoDocumento }}</td>
-                  <td>{{ d.nombreArchivo }}</td>
+                  <td>
+                    {{ d.tipoDocumentoInstitucional?.nombre ?? 'Sin tipo' }}
+                    @if (d.tipoDocumento) {
+                      <span class="texto-pequeno texto-secundario">· {{ d.tipoDocumento }}</span>
+                    }
+                  </td>
+                  <td>
+                    @if (d.enlace) {
+                      Enlace de SharePoint
+                    } @else {
+                      {{ d.nombreArchivo }}
+                      @if (d.tamanoBytes) {
+                        <span class="texto-pequeno texto-secundario">· {{ tamanoLegible(d.tamanoBytes) }}</span>
+                      }
+                    }
+                  </td>
                   <td class="texto-pequeno">
                     @if (d.archivoDisponible) {
                       <button type="button" class="boton boton-texto boton-pequeno" (click)="descargar(d)">
                         <svg lucideDownload aria-hidden="true"></svg>
                         Descargar
                       </button>
+                    } @else if (d.enlace) {
+                      <a class="boton boton-texto boton-pequeno" [href]="d.enlace" target="_blank" rel="noopener noreferrer">
+                        <svg lucideExternalLink aria-hidden="true"></svg>
+                        Abrir en SharePoint
+                      </a>
                     } @else {
                       <span class="texto-secundario">Solo ruta: {{ d.rutaArchivo }}</span>
                     }
@@ -140,11 +169,33 @@
                     <span class="error-campo">Indica el nombre del documento (hasta 150 caracteres).</span>
                   }
                 </td>
-                <td colspan="3">
-                  <label class="visualmente-oculto" for="sub-archivo">Archivo PDF, PNG o JPG</label>
-                  <input id="sub-archivo" type="file" [accept]="acepta" (change)="elegirArchivo($event)" />
-                  @if (subida.controls.archivo.value; as archivo) {
-                    <span class="texto-pequeno texto-secundario">{{ archivo.name }} · {{ tamanoLegible(archivo.size) }}</span>
+                <td>
+                  <label class="visualmente-oculto" for="sub-tipo">Tipo de documento</label>
+                  <select id="sub-tipo" formControlName="tipoDocumentoInstitucionalId">
+                    <option [ngValue]="null">Tipo</option>
+                    @for (t of tiposDocumento(); track t.id) {
+                      <option [ngValue]="t.id">{{ t.nombre }}</option>
+                    }
+                  </select>
+                  @if (subida.controls.tipoDocumentoInstitucionalId.touched && subida.controls.tipoDocumentoInstitucionalId.invalid) {
+                    <span class="error-campo">Elige el tipo de documento.</span>
+                  }
+                </td>
+                <td colspan="2">
+                  <fieldset class="origen-documento">
+                    <legend class="visualmente-oculto">Contenido del documento</legend>
+                    <label><input type="radio" formControlName="origen" value="archivo" (change)="cambiarOrigenSubida()" /> Archivo</label>
+                    <label><input type="radio" formControlName="origen" value="enlace" (change)="cambiarOrigenSubida()" /> Enlace de SharePoint</label>
+                  </fieldset>
+                  @if (subida.controls.origen.value === 'archivo') {
+                    <label class="visualmente-oculto" for="sub-archivo">Archivo PDF, PNG o JPG</label>
+                    <input id="sub-archivo" type="file" [accept]="acepta" (change)="elegirArchivo($event)" />
+                    @if (subida.controls.archivo.value; as archivo) {
+                      <span class="texto-pequeno texto-secundario">{{ archivo.name }} · {{ tamanoLegible(archivo.size) }}</span>
+                    }
+                  } @else {
+                    <label class="visualmente-oculto" for="sub-enlace">Enlace de SharePoint</label>
+                    <input id="sub-enlace" type="url" formControlName="enlace" maxlength="1000" placeholder="https://upeuedupe.sharepoint.com/…" />
                   }
                   @if (errorArchivo(); as m) {
                     <span class="error-campo">{{ m }}</span>
@@ -153,7 +204,7 @@
                 <td></td>
                 <td class="col-acciones">
                   <button type="button" class="boton boton-primario boton-pequeno" [disabled]="procesando()" (click)="subirDocumento()">
-                    Subir
+                    Agregar
                   </button>
                   <button type="button" class="boton boton-texto boton-pequeno" (click)="cancelarEdicion()">Cancelar</button>
                 </td>
@@ -173,33 +224,55 @@
             <span class="error-campo">{{ m }}</span>
           }
         </td>
-        @if (editandoArchivo()) {
-          <td colspan="3" class="texto-secundario texto-pequeno">
-            El archivo cargado se conserva; solo se corrige el nombre del documento.
-          </td>
-        } @else {
-          <td>
-            <label class="visualmente-oculto" for="ed-tipo">Tipo</label>
-            <select id="ed-tipo" formControlName="tipoDocumento">
-              @for (t of tiposArchivo; track t) {
-                <option [ngValue]="t">{{ t }}</option>
+        <td>
+          <label class="visualmente-oculto" for="ed-tipo-inst">Tipo de documento</label>
+          <select id="ed-tipo-inst" formControlName="tipoDocumentoInstitucionalId">
+            <option [ngValue]="null">Tipo</option>
+            @for (t of tiposDocumento(); track t.id) {
+              <option [ngValue]="t.id">{{ t.nombre }}</option>
+            }
+          </select>
+          @if (mensajeDocumento(linea, 'tipoDocumentoInstitucionalId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </td>
+        @switch (origenEdicion()) {
+          @case ('archivo') {
+            <td colspan="2" class="texto-secundario texto-pequeno">
+              El archivo cargado se conserva; solo se corrigen el nombre y el tipo del documento.
+            </td>
+          }
+          @case ('enlace') {
+            <td colspan="2">
+              <label class="visualmente-oculto" for="ed-enlace">Enlace de SharePoint</label>
+              <input id="ed-enlace" type="url" formControlName="enlace" maxlength="1000" />
+              @if (mensajeDocumento(linea, 'enlace'); as m) {
+                <span class="error-campo">{{ m }}</span>
               }
-            </select>
-          </td>
-          <td>
-            <label class="visualmente-oculto" for="ed-archivo">Nombre de archivo</label>
-            <input id="ed-archivo" type="text" formControlName="nombreArchivo" maxlength="255" />
-            @if (mensajeDocumento(linea, 'nombreArchivo'); as m) {
-              <span class="error-campo">{{ m }}</span>
-            }
-          </td>
-          <td>
-            <label class="visualmente-oculto" for="ed-ruta">Ruta</label>
-            <input id="ed-ruta" type="text" formControlName="rutaArchivo" maxlength="500" />
-            @if (mensajeDocumento(linea, 'rutaArchivo'); as m) {
-              <span class="error-campo">{{ m }}</span>
-            }
-          </td>
+            </td>
+          }
+          @default {
+            <td>
+              <label class="visualmente-oculto" for="ed-archivo">Nombre de archivo</label>
+              <input id="ed-archivo" type="text" formControlName="nombreArchivo" maxlength="255" />
+              <label class="visualmente-oculto" for="ed-formato">Formato</label>
+              <select id="ed-formato" formControlName="tipoDocumento">
+                @for (t of tiposArchivo; track t) {
+                  <option [ngValue]="t">{{ t }}</option>
+                }
+              </select>
+              @if (mensajeDocumento(linea, 'nombreArchivo'); as m) {
+                <span class="error-campo">{{ m }}</span>
+              }
+            </td>
+            <td>
+              <label class="visualmente-oculto" for="ed-ruta">Ruta</label>
+              <input id="ed-ruta" type="text" formControlName="rutaArchivo" maxlength="500" />
+              @if (mensajeDocumento(linea, 'rutaArchivo'); as m) {
+                <span class="error-campo">{{ m }}</span>
+              }
+            </td>
+          }
         }
         <td></td>
         <td class="col-acciones">

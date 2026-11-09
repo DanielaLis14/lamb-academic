@@ -27,7 +27,8 @@ import java.util.Map;
 
 /**
  * Manejo global de errores de todos los modulos (contrato de S1 3.8):
- * 400 datos invalidos, 404 recurso inexistente, 409 conflicto de negocio, 500 no controlado.
+ * 400 datos invalidos, 404 recurso inexistente, 409 conflicto de negocio, 422 solicitud incompleta,
+ * 500 no controlado.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -44,6 +45,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleReglaNegocio(ReglaNegocioException ex, HttpServletRequest req) {
         log.warn("Regla de negocio: {}", ex.getMessage());
         return build(HttpStatus.CONFLICT, ex.getMessage(), req, null);
+    }
+
+    @ExceptionHandler(SolicitudIncompletaException.class)
+    public ResponseEntity<ErrorResponse> handleSolicitudIncompleta(SolicitudIncompletaException ex,
+                                                                   HttpServletRequest req) {
+        log.warn("Solicitud incompleta: {}", ex.getMessage());
+        return build(HttpStatus.valueOf(422), ex.getMessage(), req, null);
     }
 
     @ExceptionHandler(AccesoDenegadoException.class)

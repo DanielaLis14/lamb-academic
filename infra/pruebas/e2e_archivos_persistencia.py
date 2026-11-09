@@ -66,13 +66,24 @@ def multipart(partes):
     return cuerpo + f"--{limite}--\r\n".encode(), f"multipart/form-data; boundary={limite}"
 
 
-def registrar_con_archivos(usuario, codigo, archivos, persona=None):
-    datos = {"codigoTramite": codigo, "asunto": "Prueba de archivos e2e", "personaId": persona,
-             "nombres": [n for n, _, _, _ in archivos]}
+def registrar_con_archivos(usuario, tipo_solicitud, archivos, persona=None, enlaces=()):
+    """archivos: [(nombre, archivo, content-type, bytes, codigo de tipo de documento)];
+    enlaces: [(nombre, enlace, codigo de tipo de documento)]. El codigo de tramite lo genera el servidor."""
+    tipo_sol = TIPO[tipo_solicitud]
+    documentos = [{"nombre": n, "tipoDocumentoInstitucionalId": DOC[d], "enlace": None} for n, _, _, _, d in archivos]
+    documentos += [{"nombre": n, "tipoDocumentoInstitucionalId": DOC[d], "enlace": e} for n, e, d in enlaces]
+    datos = {"asunto": f"Prueba de archivos e2e {SELLO}", "personaId": persona, "categoriaId": tipo_sol["categoriaId"],
+             "tipoSolicitudId": tipo_sol["id"], "documentos": documentos}
     partes = [("datos", None, "application/json", json.dumps(datos).encode())]
-    partes += [("archivos", archivo, tipo, contenido) for _, archivo, tipo, contenido in archivos]
+    partes += [("archivos", archivo, tipo, contenido) for _, archivo, tipo, contenido, _ in archivos]
     cuerpo, tipo = multipart(partes)
     return peticion(usuario, "POST", "/api/v1/expedientes", cuerpo, tipo)
+
+
+def archivar(exp_id):
+    """Cierra un expediente de prueba REGISTRADO: ya no bloquea otro del mismo tipo en la siguiente ejecucion."""
+    estado, _ = peticion("coordinador", "PATCH", f"/api/v1/expedientes/{exp_id}/estado", {"estado": "ARCHIVADO"})
+    caso(f"Se archiva el expediente de prueba {exp_id}", estado, 200)
 
 
 def archivos_en_almacen():
@@ -94,17 +105,27 @@ TOKENS = {u: kc.login(u)["access_token"] for u in ["ana.quispe", "jose.apaza", "
 _, periodos = peticion("coordinador", "GET", "/api/v1/periodos")
 activo = sorted([p for p in periodos if p["estado"] == "ACTIVO"], key=lambda p: p["fechaInicio"])[-1]
 
-print("--- A. Expedientes con archivos reales")
+# Catalogos de tramite (V5), por codigo: los ids dependen de la base.
+_, categorias = peticion("ana.quispe", "GET", "/api/v1/expedientes/catalogos/categorias")
+TIPO = {}
+for categoria in categorias:
+    _, tipos = peticion("ana.quispe", "GET", f"/api/v1/expedientes/catalogos/categorias/{categoria['id']}/tipos-solicitud")
+    TIPO.update({t["codigo"]: t for t in tipos})
+_, tipos_documento = peticion("ana.quispe", "GET", "/api/v1/expedientes/catalogos/tipos-documento")
+DOC = {d["codigo"]: d["id"] for d in tipos_documento}
+
+print("--- A. Expedientes con archivos reales y enlaces de SharePoint")
 antes = archivos_en_almacen()
-estado, exp = registrar_con_archivos("ana.quispe", f"ARC-{SELLO}-A", [
-    ("DNI", "dni.pdf", "application/pdf", PDF), ("Foto", "foto.png", "image/png", PNG)])
-caso("Estudiante registra expediente con PDF y PNG", estado, 201)
+estado, exp = registrar_con_archivos("ana.quispe", "EXAMEN_REZAGADO", [
+    ("FUT", "fut.pdf", "application/pdf", PDF, "FUT"), ("Voucher", "voucher.png", "image/png", PNG, "VOUCHER")])
+caso("Estudiante registra expediente con PDF y PNG", estado, 201, mensaje(exp))
 exp_id = exp["id"] if estado == 201 else None
 if exp_id:
     docs = exp["documentos"]
-    caso("Los documentos quedan con archivo y sin ruta visible",
-         [(d["archivoDisponible"], d["rutaArchivo"], d["tipoDocumento"]) for d in docs],
-         [(True, None, "PDF"), (True, None, "PNG")])
+    caso("Los documentos quedan con archivo, tipo institucional, tamano y sin ruta visible",
+         [(d["archivoDisponible"], d["rutaArchivo"], d["tipoDocumento"], d["tipoDocumentoInstitucional"]["codigo"],
+           d["tamanoBytes"]) for d in docs],
+         [(True, None, "PDF", "FUT", len(PDF)), (True, None, "PNG", "VOUCHER", len(PNG))])
     if antes is not None:
         caso("El almacen tiene dos archivos nuevos", archivos_en_almacen() - antes, 2)
     estado, contenido, cabeceras = peticion("ana.quispe", "GET", f"/api/v1/expedientes/{exp_id}/documentos/{docs[0]['id']}/archivo",
@@ -122,37 +143,78 @@ if exp_id:
         estado, _, _ = peticion(usuario, "GET", f"/api/v1/expedientes/{exp_id}/documentos/{docs[0]['id']}/archivo", crudo=True)
         caso(f"{usuario} no descarga archivos de expedientes", estado, 403)
     cuerpo, tipo = multipart([("nombre", None, "text/plain", "Certificado".encode()),
+                              ("tipoDocumentoInstitucionalId", None, "text/plain", str(DOC["CERT_MEDICO"]).encode()),
                               ("archivo", "certificado.pdf", "application/pdf", PDF)])
     estado, r = peticion("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos", cuerpo, tipo)
     caso("Agrega un documento con archivo al expediente", estado, 201, f"total {r.get('totalDocumentos')}" if estado == 201 else mensaje(r))
-    estado, r = peticion("ana.quispe", "PUT", f"/api/v1/expedientes/{exp_id}/documentos/{docs[0]['id']}",
-                         {"nombre": "DNI vigente", "nombreArchivo": "otro.png", "tipoDocumento": "PNG", "rutaArchivo": "/otra"})
-    corregido = next(d for d in r["documentos"] if d["id"] == docs[0]["id"]) if estado == 200 else {}
-    caso("Corregir un documento con archivo solo cambia el nombre",
-         (corregido.get("nombre"), corregido.get("nombreArchivo"), corregido.get("archivoDisponible")),
-         ("DNI vigente", "dni.pdf", True))
-    estado, r = peticion("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos",
-                         {"nombre": "x", "nombreArchivo": "x.pdf", "tipoDocumento": "PDF",
-                          "rutaArchivo": "almacen:" + str(uuid.uuid4()) + ".pdf"})
-    caso("No se acepta una ruta del almacen escrita por el usuario", estado, 409, mensaje(r))
+    cuerpo, tipo = multipart([("nombre", None, "text/plain", "Anexo".encode()),
+                              ("tipoDocumentoInstitucionalId", None, "text/plain", str(DOC["OTRO"]).encode()),
+                              ("enlace", None, "text/plain", f"https://upeuedupe-my.sharepoint.com/:b:/g/personal/ana/A{SELLO}".encode())])
+    estado, r = peticion("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos", cuerpo, tipo)
+    caso("Agrega un documento con enlace de SharePoint (multipart, sin archivo)", estado, 201, mensaje(r))
+    cuerpo, tipo = multipart([("nombre", None, "text/plain", "Ambos".encode()),
+                              ("tipoDocumentoInstitucionalId", None, "text/plain", str(DOC["OTRO"]).encode()),
+                              ("archivo", "ambos.pdf", "application/pdf", PDF),
+                              ("enlace", None, "text/plain", b"https://upeuedupe.sharepoint.com/x")])
     previo = archivos_en_almacen()
+    estado, r = peticion("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos", cuerpo, tipo)
+    caso("Archivo y enlace a la vez se rechazan sin guardar el archivo", (estado, archivos_en_almacen() == previo),
+         (409, True), mensaje(r))
+    estado, r = peticion("ana.quispe", "PUT", f"/api/v1/expedientes/{exp_id}/documentos/{docs[0]['id']}",
+                         {"nombre": "FUT vigente", "tipoDocumentoInstitucionalId": DOC["FUT"], "nombreArchivo": "otro.png",
+                          "tipoDocumento": "PNG", "rutaArchivo": "/otra"})
+    corregido = next(d for d in r["documentos"] if d["id"] == docs[0]["id"]) if estado == 200 else {}
+    caso("Corregir un documento con archivo solo cambia el nombre (y su tipo institucional)",
+         (corregido.get("nombre"), corregido.get("nombreArchivo"), corregido.get("archivoDisponible")),
+         ("FUT vigente", "fut.pdf", True))
+    estado, r = peticion("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos",
+                         {"nombre": "x", "tipoDocumentoInstitucionalId": DOC["OTRO"], "nombreArchivo": "x.pdf",
+                          "tipoDocumento": "PDF", "rutaArchivo": "almacen:" + str(uuid.uuid4()) + ".pdf"})
+    caso("No se acepta una ruta del almacen escrita por el usuario", estado, 409, mensaje(r))
+    estado, r = peticion("ana.quispe", "POST", f"/api/v1/expedientes/{exp_id}/documentos",
+                         {"nombre": "x", "tipoDocumentoInstitucionalId": DOC["OTRO"],
+                          "enlace": "almacen:" + str(uuid.uuid4()) + ".pdf"})
+    caso("No se acepta el prefijo almacen: como enlace", estado, 409, mensaje(r))
     estado, r = peticion("ana.quispe", "DELETE", f"/api/v1/expedientes/{exp_id}/documentos/{docs[1]['id']}")
-    caso("Quitar un documento con archivo", estado, 200)
+    caso("No se quita el unico voucher (obligatorio de examen rezagado)", estado, 422, mensaje(r))
+    _, actual = peticion("ana.quispe", "GET", f"/api/v1/expedientes/{exp_id}")
+    certificado = next((d for d in actual["documentos"] if d["nombre"] == "Certificado"), None)
+    previo = archivos_en_almacen()
+    estado, r = peticion("ana.quispe", "DELETE", f"/api/v1/expedientes/{exp_id}/documentos/{certificado['id']}")
+    caso("Quitar un documento con archivo (recomendado)", estado, 200, mensaje(r))
     if previo is not None:
         caso("El archivo del documento quitado se borra del almacen", previo - archivos_en_almacen(), 1)
+    archivar(exp_id)
 
 previo = archivos_en_almacen()
-estado, r = registrar_con_archivos("ana.quispe", f"ARC-{SELLO}-B", [
-    ("DNI", "dni.pdf", "application/pdf", PDF), ("Falso", "virus.pdf", "application/pdf", b"MZ ejecutable")])
+estado, r = registrar_con_archivos("ana.quispe", "CONSTANCIA_ESTUDIOS", [
+    ("FUT", "fut.pdf", "application/pdf", PDF, "FUT"),
+    ("Voucher falso", "virus.pdf", "application/pdf", b"MZ ejecutable", "VOUCHER")])
 caso("Un archivo con contenido falso rechaza todo el registro", estado, 409, mensaje(r))
-_, lista = peticion("coordinador", "GET", "/api/v1/expedientes")
-caso("El expediente rechazado no se guardo", any(e["codigoTramite"] == f"ARC-{SELLO}-B" for e in lista), False)
+_, lista = peticion("coordinador", "GET", "/api/v1/expedientes?estado=REGISTRADO")
+caso("El expediente rechazado no se guardo",
+     any(e["tipoSolicitudNombre"] == "Constancia de estudios" and str(SELLO) in e["asunto"] for e in lista), False)
 if previo is not None:
     caso("No quedan archivos huerfanos del registro rechazado", archivos_en_almacen(), previo)
-estado, r = registrar_con_archivos("ana.quispe", f"ARC-{SELLO}-C", [("Grande", "grande.pdf", "application/pdf",
-                                                                     PDF + b"0" * (6 * 1024 * 1024))])
+estado, r = registrar_con_archivos("ana.quispe", "RESERVA_MATRICULA", [
+    ("FUT", "grande.pdf", "application/pdf", PDF + b"0" * (6 * 1024 * 1024), "FUT")])
 caso("Un archivo de mas de 5 MB se rechaza", estado, 413, mensaje(r))
-estado, r = registrar_con_archivos("docente.mendoza", f"ARC-{SELLO}-D", [("DNI", "dni.pdf", "application/pdf", PDF)])
+previo = archivos_en_almacen()
+casi_cinco = PDF + b"0" * (4 * 1024 * 1024 + 512 * 1024)
+estado, r = registrar_con_archivos("ana.quispe", "CERTIFICADO_ESTUDIOS",
+                                   [("FUT", "fut.pdf", "application/pdf", casi_cinco, "FUT"),
+                                    ("Voucher", "voucher.pdf", "application/pdf", casi_cinco, "VOUCHER")]
+                                   + [(f"Anexo {i}", f"anexo{i}.pdf", "application/pdf", casi_cinco, "OTRO") for i in range(4)])
+caso("Mas de 25 MB en total por expediente se rechaza sin guardar archivos",
+     (estado, "25.0 MB" in mensaje(r), archivos_en_almacen() == previo), (409, True, True), mensaje(r))
+estado, r = registrar_con_archivos("ana.quispe", "FRACCIONAMIENTO", [], enlaces=[
+    ("FUT en SharePoint", f"https://upeuedupe.sharepoint.com/:b:/s/tramites/F{SELLO}", "FUT")])
+caso("Registro solo con enlaces de SharePoint, sin partes de archivo", estado, 201, mensaje(r))
+if estado == 201:
+    caso("El documento con enlace no se descarga", peticion("ana.quispe", "GET",
+         f"/api/v1/expedientes/{r['id']}/documentos/{r['documentos'][0]['id']}/archivo", crudo=True)[0], 404)
+    archivar(r["id"])
+estado, r = registrar_con_archivos("docente.mendoza", "RETIRO_CURSO", [("FUT", "fut.pdf", "application/pdf", PDF, "FUT")])
 caso("Un docente no registra expedientes", estado, 403)
 
 print("--- B. Persistencia de horarios de seccion y de prerrequisitos de mallas")

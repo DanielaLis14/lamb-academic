@@ -4,7 +4,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LucideDownload, LucidePencil, LucidePlus, LucideTrash } from '@lucide/angular';
+import { LucideDownload, LucideExternalLink, LucidePencil, LucidePlus, LucideTrash } from '@lucide/angular';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth-service';
 import { ROLES_COORDINACION } from '../../../core/auth/roles';
@@ -14,15 +14,18 @@ import { confirmar } from '../../../shared/componentes/confirmar-dialogo';
 import { EtiquetaEstado } from '../../../shared/componentes/etiqueta-estado';
 import {
   GrupoDocumento,
+  OrigenDocumento,
   grupoDocumento,
   guardarEnEquipo,
   mensajeDocumento,
   problemaArchivo,
+  problemaEnlace,
   tamanoLegible,
   valorDocumento,
 } from './documento-form';
 import {
   ACEPTA_ARCHIVO,
+  Catalogo,
   DocumentoAdjunto,
   ESTADOS_EDITABLES,
   EstadoExpediente,
@@ -52,6 +55,7 @@ const EFECTO_ESTADO: Record<EstadoExpediente, string> = {
     NgTemplateOutlet,
     EtiquetaEstado,
     LucideDownload,
+    LucideExternalLink,
     LucidePencil,
     LucidePlus,
     LucideTrash,
@@ -77,13 +81,17 @@ export class ExpedienteDetalle {
   /** Documento en edicion (id) o 0 para uno nuevo; null sin edicion abierta. */
   protected readonly editando = signal<number | null>(null);
   protected linea: GrupoDocumento = grupoDocumento(this.fb);
-  /** El documento en edicion tiene archivo cargado: solo se corrige su nombre. */
-  protected readonly editandoArchivo = signal(false);
+  /** Origen del documento en edicion: con archivo cargado solo se corrigen su nombre y su tipo. */
+  protected readonly origenEdicion = signal<OrigenDocumento>('ruta');
   protected readonly acepta = ACEPTA_ARCHIVO;
   protected readonly tamanoLegible = tamanoLegible;
+  protected readonly tiposDocumento = signal<Catalogo[]>([]);
   protected readonly subida = this.fb.group({
     nombre: this.fb.nonNullable.control('', [Validators.required, Validators.maxLength(150)]),
+    tipoDocumentoInstitucionalId: this.fb.control<number | null>(null, Validators.required),
+    origen: this.fb.nonNullable.control<OrigenDocumento>('archivo'),
     archivo: this.fb.control<File | null>(null),
+    enlace: this.fb.nonNullable.control(''),
   });
   protected readonly errorArchivo = signal<string | null>(null);
 
@@ -100,6 +108,10 @@ export class ExpedienteDetalle {
   private readonly id = Number(this.route.snapshot.paramMap.get('id'));
 
   constructor() {
+    this.expedienteService.tiposDocumento().subscribe({
+      next: (data) => this.tiposDocumento.set(data),
+      error: (err: HttpErrorResponse) => this.error.set(mensajeHttp(err, 'No se pudieron cargar los tipos de documento.')),
+    });
     this.expedienteService.obtener(this.id).subscribe({
       next: (e) => {
         this.expediente.set(e);
@@ -113,14 +125,26 @@ export class ExpedienteDetalle {
   }
 
   nuevoDocumento(): void {
-    this.subida.reset({ nombre: '', archivo: null });
+    this.subida.reset({ nombre: '', tipoDocumentoInstitucionalId: null, origen: 'archivo', archivo: null, enlace: '' });
     this.errorArchivo.set(null);
     this.editando.set(0);
   }
 
   editar(documento: DocumentoAdjunto): void {
-    this.editandoArchivo.set(documento.archivoDisponible);
-    this.linea = grupoDocumento(this.fb, { ...documento, rutaArchivo: documento.rutaArchivo ?? 'archivo cargado' });
+    const origen: OrigenDocumento = documento.archivoDisponible ? 'archivo' : documento.enlace ? 'enlace' : 'ruta';
+    this.origenEdicion.set(origen);
+    this.linea = grupoDocumento(
+      this.fb,
+      {
+        nombre: documento.nombre,
+        tipoDocumentoInstitucionalId: documento.tipoDocumentoInstitucional?.id,
+        nombreArchivo: documento.nombreArchivo,
+        tipoDocumento: documento.tipoDocumento,
+        rutaArchivo: documento.rutaArchivo,
+        enlace: documento.enlace,
+      },
+      origen,
+    );
     this.editando.set(documento.id);
   }
 
@@ -133,16 +157,25 @@ export class ExpedienteDetalle {
     }
   }
 
+  /** Cambiar entre archivo y enlace limpia el mensaje del otro origen. */
+  cambiarOrigenSubida(): void {
+    this.errorArchivo.set(null);
+  }
+
   subirDocumento(): void {
     if (this.procesando()) return;
-    const archivo = this.subida.controls.archivo.value;
-    this.errorArchivo.set(problemaArchivo(archivo));
+    const v = this.subida.getRawValue();
+    this.errorArchivo.set(v.origen === 'enlace' ? problemaEnlace(v.enlace) : problemaArchivo(v.archivo));
     if (this.subida.invalid || this.errorArchivo()) {
       this.subida.markAllAsTouched();
       return;
     }
-    this.ejecutar(this.expedienteService.agregarArchivo(this.id, this.subida.controls.nombre.value.trim(), archivo!),
-      'Documento agregado con su archivo.', 'No se pudo agregar el documento. No se guardó el archivo.');
+    const contenido = v.origen === 'enlace' ? { enlace: v.enlace.trim() } : { archivo: v.archivo as File };
+    this.ejecutar(
+      this.expedienteService.agregarArchivo(this.id, v.nombre.trim(), v.tipoDocumentoInstitucionalId as number, contenido),
+      v.origen === 'enlace' ? 'Documento agregado con su enlace.' : 'Documento agregado con su archivo.',
+      'No se pudo agregar el documento. No se guardó nada.',
+    );
   }
 
   descargar(documento: DocumentoAdjunto): void {
@@ -163,15 +196,23 @@ export class ExpedienteDetalle {
       this.linea.markAllAsTouched();
       return;
     }
-    this.ejecutar(this.expedienteService.actualizarDocumento(this.id, documentoId, valorDocumento(this.linea)),
-      'Documento corregido.', 'No se pudo guardar el documento.');
+    this.ejecutar(
+      this.expedienteService.actualizarDocumento(this.id, documentoId, valorDocumento(this.linea, this.origenEdicion())),
+      'Documento corregido.',
+      'No se pudo guardar el documento.',
+    );
   }
 
   eliminar(documento: DocumentoAdjunto): void {
+    let contenido: string;
+    if (documento.archivoDisponible) contenido = 'El archivo se borra del almacén.';
+    else if (documento.enlace) contenido = 'El documento en SharePoint no se modifica.';
+    else contenido = 'Ruta: ' + documento.rutaArchivo;
     confirmar(this.dialog, {
       titulo: `Quitar el documento ${documento.nombre}`,
-      mensaje: 'El documento se retira del expediente. El expediente debe conservar al menos un documento.',
-      detalle: [documento.nombreArchivo, documento.archivoDisponible ? 'El archivo se borra del almacén.' : `Ruta: ${documento.rutaArchivo}`],
+      mensaje:
+        'El documento se retira del expediente. El expediente debe conservar al menos un documento y los obligatorios de su tipo.',
+      detalle: [documento.enlace ? 'Enlace de SharePoint' : documento.nombreArchivo, contenido],
       confirmar: 'Quitar documento',
       peligro: true,
     }).subscribe((ok) => {

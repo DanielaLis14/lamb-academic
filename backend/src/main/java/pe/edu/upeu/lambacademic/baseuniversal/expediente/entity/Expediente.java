@@ -53,6 +53,19 @@ public class Expediente {
     @JoinColumn(name = "ID_PERSONA", nullable = false)
     private Persona persona;
 
+    /** Catalogos (V5). NULL en los expedientes registrados antes de V5. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_CATEGORIA")
+    private CategoriaTramite categoria;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_TIPO_SOLICITUD")
+    private TipoSolicitud tipoSolicitud;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_DESTINATARIO")
+    private Destinatario destinatario;
+
     /** Calculado en el service a partir de los detalles; no lo envia el cliente. */
     @Column(name = "TOTAL_DOCUMENTOS", nullable = false)
     private Integer totalDocumentos = 0;
