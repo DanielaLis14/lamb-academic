@@ -22,8 +22,22 @@
         </rollingPolicy>
     </appender>
 
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-    </root>
+    <!-- Desarrollo: detalle de la aplicacion para depurar. -->
+    <springProfile name="!prod">
+        <logger name="pe.edu.upeu.lambacademic" level="DEBUG"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Produccion: solo advertencias del framework e INFO de la aplicacion (sin DEBUG ni SQL). -->
+    <springProfile name="prod">
+        <logger name="pe.edu.upeu.lambacademic" level="INFO"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
 </configuration>

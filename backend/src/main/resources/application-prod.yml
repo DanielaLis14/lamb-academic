@@ -1,0 +1,73 @@
+# Perfil de PRODUCCION (S13). Se activa con SPRING_PROFILES_ACTIVE=prod.
+# Sin secretos ni valores por omision para credenciales: si falta una variable de entorno, el backend no arranca.
+#   LAMB_DB_URL, LAMB_DB_USERNAME, LAMB_DB_PASSWORD   Oracle
+#   LAMB_KEYCLOAK_ISSUER                              realm lamb-academic (https)
+#   LAMB_CORS_ALLOWED_ORIGINS                         origen(es) del frontend, separados por coma; nunca "*"
+#   LAMB_ARCHIVOS_DIR                                 almacen privado de los expedientes (fuera de la aplicacion)
+server:
+  port: ${PORT:8080}
+  # No exponer detalles internos en las respuestas de error del contenedor.
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+
+spring:
+  datasource:
+    url: ${LAMB_DB_URL}
+    username: ${LAMB_DB_USERNAME}
+    password: ${LAMB_DB_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # El esquema lo crean los scripts revisados de infra/oracle (no Hibernate).
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          fetch_size: 100
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${LAMB_KEYCLOAK_ISSUER}
+
+  devtools:
+    restart:
+      enabled: false
+    livereload:
+      enabled: false
+
+# Actuator: solo health, sin detalles ni componentes (ni env, ni metrics, ni modulith).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  info:
+    env:
+      enabled: false
+
+logging:
+  level:
+    root: WARN
+    pe.edu.upeu.lambacademic: INFO
+    org.hibernate.SQL: WARN
+
+lamb:
+  cors:
+    allowed-origins: ${LAMB_CORS_ALLOWED_ORIGINS}
+  archivos:
+    directorio: ${LAMB_ARCHIVOS_DIR}
+  matricula:
+    prerrequisitos:
+      politica: APROBADO
+    cuotas-por-defecto: 5

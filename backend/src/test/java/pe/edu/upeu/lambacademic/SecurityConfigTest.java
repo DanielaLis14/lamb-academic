@@ -317,6 +317,19 @@ class SecurityConfigTest {
     }
 
     @Test
+    void soloLosCatalogosDeExpedienteSeCacheanEnElNavegador() throws Exception {
+        // S13: catalogos de solo lectura, 5 minutos y "private" (exigen sesion); un endpoint que escribe, no.
+        mockMvc.perform(get("/api/v1/expedientes/catalogos/tipos-documento").with(estudiante(1001)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "max-age=300, private"));
+        when(expedienteService.personaDeAlumno(1001L)).thenReturn(501L);
+        mockMvc.perform(delete("/api/v1/expedientes/9/documentos/31").with(estudiante(1001)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("max-age=300"))));
+    }
+
+    @Test
     void revisionYReporteDeExpedientesSonDeCoordinacion() throws Exception {
         mockMvc.perform(patch("/api/v1/expedientes/9/estado").with(estudiante(1001))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"estado\":\"APROBADO\"}"))
