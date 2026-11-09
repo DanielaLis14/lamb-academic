@@ -1,0 +1,214 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/expedientes">{{ esCoordinacion() ? 'Expedientes' : 'Mis expedientes' }}</a></p>
+      <h1>{{ expediente()?.codigoTramite ?? 'Expediente' }}</h1>
+      @if (expediente(); as e) {
+        <p class="descripcion">{{ e.asunto }}</p>
+      }
+    </div>
+    @if (destinos().length) {
+      <div class="acciones">
+        @for (destino of destinos(); track destino) {
+          <button
+            type="button"
+            class="boton"
+            [class.boton-primario]="destino === 'APROBADO' || destino === 'EN_REVISION'"
+            [disabled]="procesando()"
+            (click)="cambiarEstado(destino)"
+          >
+            Pasar a {{ nombreEstado[destino] }}
+          </button>
+        }
+      </div>
+    }
+  </header>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando expediente…</p>
+  } @else if (expediente(); as e) {
+    <div class="rejilla rejilla-2">
+      <article class="tarjeta">
+        <header><h2>Cabecera</h2></header>
+        <div class="cuerpo">
+          <dl class="datos">
+            <dt>Estado</dt>
+            <dd><app-etiqueta-estado [estado]="e.estado" /></dd>
+            <dt>Titular</dt>
+            <dd>{{ e.persona.nombreCompleto }}</dd>
+            <dt>Documento</dt>
+            <dd>{{ e.persona.numeroDocumento }}</dd>
+            <dt>Escuela</dt>
+            <dd>{{ e.persona.escuelaNombre ?? '—' }}</dd>
+            <dt>Registro</dt>
+            <dd>{{ e.fechaRegistro | date: 'dd/MM/yyyy HH:mm' }}</dd>
+            <dt>Documentos</dt>
+            <dd>{{ e.totalDocumentos }}</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="tarjeta">
+        <header><h2>Situación del trámite</h2></header>
+        <div class="cuerpo">
+          @if (editable()) {
+            <p>Los documentos se pueden corregir, agregar o quitar mientras el expediente esté Registrado u Observado.</p>
+          } @else {
+            <p>En estado {{ nombreEstado[e.estado] }} los documentos ya no se modifican.</p>
+          }
+          <p class="texto-secundario texto-pequeno">
+            Los archivos cargados se guardan en el almacén privado de la universidad. Los documentos registrados antes
+            de la carga de archivos conservan solo la ruta que se declaró.
+          </p>
+        </div>
+      </article>
+    </div>
+
+    <article class="tarjeta">
+      <header>
+        <h2>Documentos adjuntos</h2>
+        @if (editable() && admiteMas() && editando() === null) {
+          <button type="button" class="boton boton-pequeno" (click)="nuevoDocumento()">
+            <svg lucidePlus aria-hidden="true"></svg>
+            Agregar documento
+          </button>
+        }
+      </header>
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Documento</th>
+              <th>Tipo</th>
+              <th>Archivo</th>
+              <th>Contenido</th>
+              <th>Carga</th>
+              @if (editable()) {
+                <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of e.documentos; track d.id) {
+              @if (editando() === d.id) {
+                <ng-container *ngTemplateOutlet="edicion" />
+              } @else {
+                <tr>
+                  <td class="celda-principal">{{ d.nombre }}</td>
+                  <td>{{ d.tipoDocumento }}</td>
+                  <td>{{ d.nombreArchivo }}</td>
+                  <td class="texto-pequeno">
+                    @if (d.archivoDisponible) {
+                      <button type="button" class="boton boton-texto boton-pequeno" (click)="descargar(d)">
+                        <svg lucideDownload aria-hidden="true"></svg>
+                        Descargar
+                      </button>
+                    } @else {
+                      <span class="texto-secundario">Solo ruta: {{ d.rutaArchivo }}</span>
+                    }
+                  </td>
+                  <td class="num">{{ d.fechaCarga | date: 'dd/MM/yyyy HH:mm' }}</td>
+                  @if (editable()) {
+                    <td class="col-acciones">
+                      <button type="button" class="boton boton-texto boton-pequeno" [disabled]="editando() !== null" (click)="editar(d)">
+                        <svg lucidePencil aria-hidden="true"></svg>
+                        Corregir
+                      </button>
+                      <button
+                        type="button"
+                        class="boton boton-texto boton-pequeno boton-peligro"
+                        [disabled]="editando() !== null || e.documentos.length === 1 || procesando()"
+                        (click)="eliminar(d)"
+                      >
+                        <svg lucideTrash aria-hidden="true"></svg>
+                        Quitar
+                      </button>
+                    </td>
+                  }
+                </tr>
+              }
+            }
+            @if (editando() === 0) {
+              <tr [formGroup]="subida">
+                <td>
+                  <label class="visualmente-oculto" for="sub-nombre">Nombre del documento</label>
+                  <input id="sub-nombre" type="text" formControlName="nombre" maxlength="150" placeholder="Nombre del documento" />
+                  @if (subida.controls.nombre.touched && subida.controls.nombre.invalid) {
+                    <span class="error-campo">Indica el nombre del documento (hasta 150 caracteres).</span>
+                  }
+                </td>
+                <td colspan="3">
+                  <label class="visualmente-oculto" for="sub-archivo">Archivo PDF, PNG o JPG</label>
+                  <input id="sub-archivo" type="file" [accept]="acepta" (change)="elegirArchivo($event)" />
+                  @if (subida.controls.archivo.value; as archivo) {
+                    <span class="texto-pequeno texto-secundario">{{ archivo.name }} · {{ tamanoLegible(archivo.size) }}</span>
+                  }
+                  @if (errorArchivo(); as m) {
+                    <span class="error-campo">{{ m }}</span>
+                  }
+                </td>
+                <td></td>
+                <td class="col-acciones">
+                  <button type="button" class="boton boton-primario boton-pequeno" [disabled]="procesando()" (click)="subirDocumento()">
+                    Subir
+                  </button>
+                  <button type="button" class="boton boton-texto boton-pequeno" (click)="cancelarEdicion()">Cancelar</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <ng-template #edicion>
+      <tr [formGroup]="linea">
+        <td>
+          <label class="visualmente-oculto" for="ed-nombre">Documento</label>
+          <input id="ed-nombre" type="text" formControlName="nombre" maxlength="150" />
+          @if (mensajeDocumento(linea, 'nombre'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </td>
+        @if (editandoArchivo()) {
+          <td colspan="3" class="texto-secundario texto-pequeno">
+            El archivo cargado se conserva; solo se corrige el nombre del documento.
+          </td>
+        } @else {
+          <td>
+            <label class="visualmente-oculto" for="ed-tipo">Tipo</label>
+            <select id="ed-tipo" formControlName="tipoDocumento">
+              @for (t of tiposArchivo; track t) {
+                <option [ngValue]="t">{{ t }}</option>
+              }
+            </select>
+          </td>
+          <td>
+            <label class="visualmente-oculto" for="ed-archivo">Nombre de archivo</label>
+            <input id="ed-archivo" type="text" formControlName="nombreArchivo" maxlength="255" />
+            @if (mensajeDocumento(linea, 'nombreArchivo'); as m) {
+              <span class="error-campo">{{ m }}</span>
+            }
+          </td>
+          <td>
+            <label class="visualmente-oculto" for="ed-ruta">Ruta</label>
+            <input id="ed-ruta" type="text" formControlName="rutaArchivo" maxlength="500" />
+            @if (mensajeDocumento(linea, 'rutaArchivo'); as m) {
+              <span class="error-campo">{{ m }}</span>
+            }
+          </td>
+        }
+        <td></td>
+        <td class="col-acciones">
+          <button type="button" class="boton boton-primario boton-pequeno" [disabled]="procesando()" (click)="guardarDocumento()">
+            Guardar
+          </button>
+          <button type="button" class="boton boton-texto boton-pequeno" (click)="cancelarEdicion()">Cancelar</button>
+        </td>
+      </tr>
+    </ng-template>
+  }
+</section>

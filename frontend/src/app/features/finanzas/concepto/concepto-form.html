@@ -1,0 +1,65 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/finanzas/conceptos">Conceptos de pago</a></p>
+      <h1>{{ id() ? 'Editar concepto' : 'Nuevo concepto' }}</h1>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (loading() && id()) {
+        <p class="estado-carga">Cargando concepto…</p>
+      }
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+      @if (id()) {
+        <p class="mensaje mensaje-info" role="note">El cambio de monto solo afecta a los cargos que se emitan desde ahora.</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="codigo">Código <span class="obligatorio">*</span></label>
+          <input id="codigo" type="text" formControlName="codigo" maxlength="20" placeholder="MAT-CRED" />
+          @if (mensajeValidacion('codigo'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="nombre">Nombre <span class="obligatorio">*</span></label>
+          <input id="nombre" type="text" formControlName="nombre" maxlength="150" />
+          @if (mensajeValidacion('nombre'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+      <div class="campos">
+        <div class="campo">
+          <label for="tipoCalculo">Cálculo <span class="obligatorio">*</span></label>
+          <select id="tipoCalculo" formControlName="tipoCalculo">
+            @for (t of tipos; track t) {
+              <option [ngValue]="t">{{ nombreCalculo[t] }}</option>
+            }
+          </select>
+          <span class="ayuda">Por crédito multiplica el monto por los créditos del cargo.</span>
+        </div>
+        <div class="campo">
+          <label for="monto">Monto en soles <span class="obligatorio">*</span></label>
+          <input id="monto" type="number" formControlName="monto" min="0" max="99999.99" step="0.01" />
+          @if (mensajeValidacion('monto'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+      <label class="casilla">
+        <input type="checkbox" formControlName="aplicaMatricula" />
+        Se aplica al cargo de cada matrícula
+      </label>
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="loading() || errorCarga()">Guardar</button>
+      <a class="boton" routerLink="/finanzas/conceptos">Cancelar</a>
+    </footer>
+  </form>
+</section>

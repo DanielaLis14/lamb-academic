@@ -1,0 +1,96 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Finanzas</p>
+      <h1>Mis pagos</h1>
+      <p class="descripcion">Tus cargos con sus cuotas y vencimientos. Los pagos se registran en caja.</p>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando estado de cuenta…</p>
+  } @else {
+    @if (saldo(); as s) {
+      <div class="tarjeta">
+        <div class="cuerpo indicadores rejilla rejilla-3">
+          <div class="indicador">
+            <span class="valor">{{ s.saldoPendiente | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+            <span class="etiqueta">Saldo pendiente</span>
+          </div>
+          <div class="indicador">
+            <span class="valor">{{ s.totalPagado | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+            <span class="etiqueta">Pagado de {{ s.deudaTotal | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+          </div>
+          <div class="indicador">
+            <span class="valor" [class.texto-error]="s.cuotasVencidas > 0">{{ s.cuotasVencidas }}</span>
+            <span class="etiqueta">Cuotas vencidas</span>
+          </div>
+        </div>
+      </div>
+    }
+
+    @for (c of cargos(); track c.id) {
+      <article class="tarjeta">
+        <header>
+          <h2>{{ c.numeroCargo }} · {{ nombreOrigen[c.procesoOrigen] }}</h2>
+          <div class="acciones">
+            <app-etiqueta-estado [estado]="c.estado" />
+            <a class="boton boton-texto boton-pequeno" [routerLink]="['/finanzas/cargos', c.id]">
+              <svg lucideEye aria-hidden="true"></svg>
+              Detalle y pagos
+            </a>
+          </div>
+        </header>
+        <div class="tabla-contenedor">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th class="num">N.°</th>
+                <th>Vencimiento</th>
+                <th class="monto">Monto</th>
+                <th class="monto">Pagado</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (q of c.cuotas; track q.id) {
+                <tr [class.vencida]="cuotaVencida(q)">
+                  <td class="num">{{ q.numeroCuota }}</td>
+                  <td class="num">
+                    {{ q.fechaVencimiento | date: 'dd/MM/yyyy' }}
+                    @if (cuotaVencida(q)) {
+                      <span class="texto-error texto-pequeno">Vencida</span>
+                    }
+                  </td>
+                  <td class="monto">{{ q.montoCuota | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                  <td class="monto">{{ q.montoPagado | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                  <td><app-etiqueta-estado [estado]="q.estado" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="cuerpo progreso">
+          @if (c.estado !== 'ANULADO') {
+            <span class="barra" role="progressbar" [attr.aria-label]="'Pagado del cargo ' + c.numeroCargo"
+              [attr.aria-valuenow]="porcentajePagado(c)" aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="porcentajePagado(c)"></span></span>
+          }
+          <span class="texto-secundario texto-pequeno">
+            Total {{ c.montoTotal | currency: 'PEN' : 'S/' : '1.2-2' }} · saldo
+            {{ c.saldoPendiente | currency: 'PEN' : 'S/' : '1.2-2' }}{{ c.estado !== 'ANULADO' ? ' · ' + porcentajePagado(c) + ' % pagado' : '' }}
+          </span>
+        </div>
+      </article>
+    } @empty {
+      @if (!error()) {
+        <div class="tarjeta">
+          <app-estado-vacio titulo="No tienes cargos registrados" descripcion="Tu cargo de matrícula aparecerá aquí al registrar tu matrícula." />
+        </div>
+      }
+    }
+  }
+</section>

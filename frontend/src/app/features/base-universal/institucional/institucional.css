@@ -1,0 +1,61 @@
+.niveles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.opciones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.opciones button,
+.opciones .fija {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: var(--lamb-radio);
+  background: none;
+  color: var(--lamb-gris-900);
+  font: inherit;
+  text-align: left;
+}
+
+.opciones button {
+  cursor: pointer;
+}
+
+.opciones button:hover {
+  background: var(--lamb-gris-50);
+}
+
+.opciones button.activa {
+  background: var(--lamb-marino-50);
+  border-color: var(--lamb-marino-100);
+  color: var(--lamb-marino-800);
+  font-weight: 500;
+}
+
+.opciones .codigo {
+  font-family: var(--lamb-fuente-num);
+  font-size: 0.8125rem;
+  color: var(--lamb-marino-700);
+}
+
+.alta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+  padding-bottom: 0.875rem;
+  border-bottom: var(--lamb-borde);
+}

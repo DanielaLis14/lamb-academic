@@ -1,0 +1,65 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a [routerLink]="volverA">{{ propia ? 'Mi carga lectiva' : 'Secciones' }}</a></p>
+      <h1>
+        @if (datos(); as d) {
+          {{ d.cursoCodigo }} · {{ d.cursoNombre }} — grupo {{ d.grupo }}
+        } @else {
+          Estudiantes de la sección
+        }
+      </h1>
+      <p class="descripcion">Estudiantes con matrícula vigente en la sección y el resultado registrado al cierre.</p>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando estudiantes…</p>
+  } @else if (datos(); as d) {
+    <div class="tarjeta">
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th class="num">N.°</th>
+              <th>Código</th>
+              <th>Apellidos y nombres</th>
+              <th>Matrícula</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (i of d.inscritos; track i.detalleId; let n = $index) {
+              <tr>
+                <td class="num">{{ n + 1 }}</td>
+                <td class="num">{{ i.codigoEstudiante ?? '—' }}</td>
+                <td class="celda-principal">{{ i.nombreCompleto ?? 'Alumno ' + i.estudianteId }}</td>
+                <td><app-etiqueta-estado [estado]="i.estadoMatricula" /></td>
+                <td>
+                  @if (i.resultado) {
+                    <app-etiqueta-estado [estado]="i.resultado" />
+                  } @else {
+                    <span class="texto-secundario">En curso</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5">
+                  <app-estado-vacio titulo="Aún no hay estudiantes matriculados en la sección" />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (d.inscritos.length) {
+        <p class="cuerpo texto-secundario texto-pequeno">{{ d.inscritos.length }} estudiante(s)</p>
+      }
+    </div>
+  }
+</section>

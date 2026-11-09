@@ -1,0 +1,111 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Trámites</p>
+      <h1>{{ esCoordinacion() ? 'Expedientes' : 'Mis expedientes' }}</h1>
+      <p class="descripcion">
+        {{ esCoordinacion() ? 'Trámites de alumnos y personal con sus documentos. Revisa, observa o aprueba cada expediente.'
+          : 'Tus trámites y sus documentos. Puedes corregirlos mientras estén registrados u observados.' }}
+      </p>
+    </div>
+    <a class="boton boton-primario" routerLink="/expedientes/nuevo">
+      <svg lucidePlus aria-hidden="true"></svg>
+      Nuevo expediente
+    </a>
+  </header>
+
+  @if (esCoordinacion() && resumen().length) {
+    <div class="tarjeta">
+      <div class="cuerpo indicadores rejilla rejilla-3">
+        @for (estado of estados; track estado) {
+          <div class="indicador">
+            <span class="valor">{{ cantidad(estado) }}</span>
+            <span class="etiqueta"><app-etiqueta-estado [estado]="estado" /></span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <form class="tarjeta" aria-label="Filtros de expedientes" (ngSubmit)="cargar()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-estado">Estado</label>
+        <select id="f-estado" name="estado" [(ngModel)]="estadoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (e of estados; track e) {
+            <option [ngValue]="e">{{ nombreEstado[e] }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-desde">Registrado desde</label>
+        <input id="f-desde" name="desde" type="date" [(ngModel)]="desde" />
+      </div>
+      <div class="campo">
+        <label for="f-hasta">Hasta</label>
+        <input id="f-hasta" name="hasta" type="date" [(ngModel)]="hasta" />
+      </div>
+      <button type="submit" class="boton">Filtrar</button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando expedientes…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Asunto</th>
+              @if (esCoordinacion()) {
+                <th>Titular</th>
+              }
+              <th>Registro</th>
+              <th class="num">Documentos</th>
+              <th>Estado</th>
+              <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of expedientes(); track e.id) {
+              <tr>
+                <td class="celda-principal num">{{ e.codigoTramite }}</td>
+                <td>{{ e.asunto }}</td>
+                @if (esCoordinacion()) {
+                  <td>{{ e.personaNombre }}</td>
+                }
+                <td class="num">{{ e.fechaRegistro | date: 'dd/MM/yyyy HH:mm' }}</td>
+                <td class="num">{{ e.totalDocumentos }}</td>
+                <td><app-etiqueta-estado [estado]="e.estado" /></td>
+                <td class="col-acciones">
+                  <a class="boton boton-texto boton-pequeno" [routerLink]="['/expedientes', e.id]">
+                    <svg lucideEye aria-hidden="true"></svg>
+                    Ver
+                  </a>
+                </td>
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="7">
+                    <app-estado-vacio
+                      titulo="No hay expedientes"
+                      [descripcion]="esCoordinacion() ? 'Cambia los filtros de estado o fechas.' : 'Registra tu primer trámite con sus documentos.'"
+                    />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>

@@ -1,0 +1,120 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Base Universal</p>
+      <h1>Alumnos</h1>
+      <p class="descripcion">
+        Solo un alumno Activo de una escuela con plan vigente está habilitado para matricularse.
+      </p>
+    </div>
+    @if (auth.tieneRol(rolAdmin)) {
+      <a class="boton boton-primario" routerLink="/alumnos/nuevo">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nuevo alumno
+      </a>
+    }
+  </header>
+
+  <form class="tarjeta" aria-label="Filtros de alumnos" (ngSubmit)="cargar()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-estado">Estado</label>
+        <select id="f-estado" name="estado" [(ngModel)]="estadoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (e of estados; track e) {
+            <option [ngValue]="e">{{ nombreEstado[e] }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-escuela">Escuela</label>
+        <select id="f-escuela" name="escuela" [(ngModel)]="escuelaFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todas</option>
+          @for (e of escuelas(); track e.id) {
+            <option [ngValue]="e.id">{{ e.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-texto">Buscar</label>
+        <input id="f-texto" name="texto" type="search" placeholder="Código, nombre o documento" [(ngModel)]="texto" />
+      </div>
+      <button type="submit" class="boton">Buscar</button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando alumnos…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Apellidos y nombres</th>
+              <th>Documento</th>
+              <th>Escuela</th>
+              <th>Ingreso</th>
+              <th>Estado</th>
+              <th>Matrícula</th>
+              @if (auth.tieneRol(rolAdmin)) {
+                <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (alumno of alumnos(); track alumno.id) {
+              <tr>
+                <td class="celda-principal num">{{ alumno.codigoEstudiante }}</td>
+                <td>{{ alumno.persona.nombreCompleto }}</td>
+                <td class="num">{{ alumno.persona.numeroDocumento }}</td>
+                <td>{{ alumno.persona.escuelaNombre ?? '—' }}</td>
+                <td class="num">{{ alumno.fechaIngreso | date: 'dd/MM/yyyy' }}</td>
+                <td><app-etiqueta-estado [estado]="alumno.estado" /></td>
+                <td>{{ alumno.habilitado ? 'Habilitado' : 'No habilitado' }}</td>
+                @if (auth.tieneRol(rolAdmin)) {
+                  <td class="col-acciones">
+                    <a class="boton boton-texto boton-pequeno" [routerLink]="['/alumnos', alumno.id, 'editar']">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Editar
+                    </a>
+                    @if (transiciones[alumno.estado].length) {
+                      <label class="visualmente-oculto" [for]="'estado-' + alumno.id">Cambiar estado de {{ alumno.codigoEstudiante }}</label>
+                      <select
+                        #selector
+                        class="boton-pequeno"
+                        [id]="'estado-' + alumno.id"
+                        (change)="cambiarEstado(alumno, $any(selector.value), selector)"
+                      >
+                        <option value="">Cambiar estado</option>
+                        @for (destino of transiciones[alumno.estado]; track destino) {
+                          <option [value]="destino">{{ nombreEstado[destino] }}</option>
+                        }
+                      </select>
+                    }
+                  </td>
+                }
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="8">
+                    <app-estado-vacio titulo="No hay alumnos con esos filtros" descripcion="Cambia los filtros o la búsqueda." />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (alumnos().length) {
+        <p class="cuerpo texto-secundario texto-pequeno">{{ alumnos().length }} alumno(s)</p>
+      }
+    }
+  </div>
+</section>

@@ -1,0 +1,151 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a [routerLink]="volverA">Cargos</a></p>
+      <h1>Cargo {{ cargo()?.numeroCargo ?? '' }}</h1>
+      @if (cargo(); as c) {
+        <p class="descripcion">{{ nombreOrigen[c.procesoOrigen] }}{{ c.observacion ? ' · ' + c.observacion : '' }}</p>
+      }
+    </div>
+    @if (esCaja() && admiteAnulacion()) {
+      <div class="acciones">
+        <button type="button" class="boton boton-peligro" [disabled]="procesando()" (click)="anular()">Anular cargo</button>
+      </div>
+    }
+  </header>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando cargo…</p>
+  } @else if (cargo(); as c) {
+    <div class="tarjeta">
+      <div class="cuerpo indicadores rejilla rejilla-3">
+        <div class="indicador">
+          <span class="valor">{{ c.montoTotal | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+          <span class="etiqueta">Total en {{ c.numeroCuotas }} cuota(s)</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ c.saldoPendiente | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+          <span class="etiqueta">Saldo pendiente</span>
+          @if (c.estado !== 'ANULADO') {
+            <div class="progreso">
+              <span class="barra" role="progressbar" aria-label="Pagado del cargo" [attr.aria-valuenow]="porcentajePagado(c)"
+                aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="porcentajePagado(c)"></span></span>
+              <span class="texto-pequeno texto-secundario">{{ porcentajePagado(c) }} % pagado</span>
+            </div>
+          }
+        </div>
+        <div class="indicador">
+          <span class="valor"><app-etiqueta-estado [estado]="c.estado" /></span>
+          <span class="etiqueta">Emitido el {{ c.fechaEmision | date: 'dd/MM/yyyy' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <article class="tarjeta">
+      <header><h2>Cuotas</h2></header>
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th class="num">N.°</th>
+              <th>Concepto</th>
+              <th>Vencimiento</th>
+              <th class="monto">Monto</th>
+              <th class="monto">Pagado</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (q of c.cuotas; track q.id) {
+              <tr [class.vencida]="cuotaVencida(q)">
+                <td class="num">{{ q.numeroCuota }}</td>
+                <td>{{ q.conceptoNombre ?? '—' }}</td>
+                <td class="num">
+                  {{ q.fechaVencimiento | date: 'dd/MM/yyyy' }}
+                  @if (cuotaVencida(q)) {
+                    <span class="texto-error texto-pequeno">Vencida</span>
+                  }
+                </td>
+                <td class="monto">{{ q.montoCuota | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                <td class="monto">{{ q.montoPagado | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                <td><app-etiqueta-estado [estado]="q.estado" /></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <div class="rejilla rejilla-2">
+      <article class="tarjeta">
+        <header><h2>Pagos registrados</h2></header>
+        @if (pagos().length) {
+          <div class="tabla-contenedor">
+            <table class="tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Medio</th>
+                  <th>Referencia</th>
+                  <th class="monto">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of pagos(); track p.id) {
+                  <tr>
+                    <td class="num">{{ p.fechaPago | date: 'dd/MM/yyyy HH:mm' }}</td>
+                    <td>{{ nombreMedio[p.medioPago] }}</td>
+                    <td>{{ p.referencia ?? '—' }}</td>
+                    <td class="monto">{{ p.monto | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="cuerpo texto-secundario">Aún no hay pagos registrados para este cargo.</p>
+        }
+      </article>
+
+      @if (esCaja() && admitePago()) {
+        <article class="tarjeta">
+          <header><h2>Registrar pago</h2></header>
+          <form class="cuerpo formulario" [formGroup]="formPago" (ngSubmit)="registrarPago()" novalidate>
+            <div class="campo">
+              <label for="monto">Monto en soles <span class="obligatorio">*</span></label>
+              <input id="monto" type="number" formControlName="monto" min="0.01" [max]="c.saldoPendiente" step="0.01" />
+              <button type="button" class="boton boton-texto boton-pequeno" (click)="pagarSaldo()">
+                Usar el saldo completo
+              </button>
+              @if (mensajePago('monto'); as m) {
+                <span class="error-campo">{{ m }}</span>
+              }
+            </div>
+            <div class="campo">
+              <label for="medioPago">Medio de pago <span class="obligatorio">*</span></label>
+              <select id="medioPago" formControlName="medioPago">
+                @for (m of medios; track m) {
+                  <option [ngValue]="m">{{ nombreMedio[m] }}</option>
+                }
+              </select>
+            </div>
+            <div class="campo">
+              <label for="referencia">Referencia</label>
+              <input id="referencia" type="text" formControlName="referencia" maxlength="100" placeholder="N.° de operación" />
+              @if (mensajePago('referencia'); as m) {
+                <span class="error-campo">{{ m }}</span>
+              }
+            </div>
+            <div class="acciones">
+              <button type="submit" class="boton boton-primario" [disabled]="procesando()">Registrar pago</button>
+            </div>
+          </form>
+        </article>
+      }
+    </div>
+  }
+</section>

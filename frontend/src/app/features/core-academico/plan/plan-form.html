@@ -1,0 +1,162 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/academico/planes">Mallas curriculares</a></p>
+      <h1>Nueva malla curricular</h1>
+      <p class="descripcion">La malla y todos sus cursos se registran juntos: si un curso no cumple una regla, no se guarda nada.</p>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="idEscuela">Escuela <span class="obligatorio">*</span></label>
+          <select id="idEscuela" formControlName="idEscuela">
+            <option [ngValue]="null">Selecciona la escuela</option>
+            @for (e of escuelas(); track e.id) {
+              <option [ngValue]="e.id">{{ e.nombre }}</option>
+            }
+          </select>
+          @if (mensaje('idEscuela'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="codigo">Código <span class="obligatorio">*</span></label>
+          <input id="codigo" type="text" formControlName="codigo" maxlength="25" placeholder="PLAN-IS-2027" />
+          @if (mensaje('codigo'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="anio">Año <span class="obligatorio">*</span></label>
+          <input id="anio" type="number" formControlName="anio" min="2000" max="2100" />
+          @if (mensaje('anio'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+      <div class="campo">
+        <label for="nombre">Nombre <span class="obligatorio">*</span></label>
+        <input id="nombre" type="text" formControlName="nombre" maxlength="150" />
+        @if (mensaje('nombre'); as m) {
+          <span class="error-campo">{{ m }}</span>
+        }
+      </div>
+
+      <h2>Cursos de la malla</h2>
+      <p class="texto-secundario texto-pequeno">
+        El prerrequisito debe ser un curso obligatorio de la misma malla en un ciclo anterior.
+      </p>
+      <div class="tabla-contenedor">
+        <table class="tabla tabla-interna" formArrayName="detalles">
+          <thead>
+            <tr>
+              <th>Curso</th>
+              <th class="num">Ciclo</th>
+              <th class="num">Créditos</th>
+              <th>Tipo</th>
+              <th>Prerrequisito</th>
+              <th class="col-acciones"><span class="visualmente-oculto">Quitar</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (fila of detalles.controls; track fila; let i = $index) {
+              <tr [formGroupName]="i">
+                <td>
+                  <label class="visualmente-oculto" [for]="'curso-' + i">Curso de la fila {{ i + 1 }}</label>
+                  <select [id]="'curso-' + i" formControlName="idCurso" (change)="alElegirCurso(i)">
+                    <option [ngValue]="null">Selecciona un curso</option>
+                    @for (c of cursos(); track c.id) {
+                      <option [ngValue]="c.id">{{ c.codigo }} · {{ c.nombre }}</option>
+                    }
+                  </select>
+                </td>
+                <td class="num">
+                  <label class="visualmente-oculto" [for]="'ciclo-' + i">Ciclo de la fila {{ i + 1 }}</label>
+                  <input [id]="'ciclo-' + i" type="number" formControlName="ciclo" min="1" max="14" />
+                </td>
+                <td class="num">
+                  <label class="visualmente-oculto" [for]="'creditos-' + i">Créditos de la fila {{ i + 1 }}</label>
+                  <input [id]="'creditos-' + i" type="number" formControlName="creditos" min="1" max="10" />
+                </td>
+                <td>
+                  <label class="visualmente-oculto" [for]="'tipo-' + i">Tipo de la fila {{ i + 1 }}</label>
+                  <select [id]="'tipo-' + i" formControlName="tipo">
+                    @for (t of tipos; track t) {
+                      <option [ngValue]="t">{{ t === 'OBLIGATORIO' ? 'Obligatorio' : 'Electivo' }}</option>
+                    }
+                  </select>
+                </td>
+                <td>
+                  <label class="visualmente-oculto" [for]="'pre-' + i">Prerrequisito de la fila {{ i + 1 }}</label>
+                  <select [id]="'pre-' + i" formControlName="idPrerrequisito">
+                    <option [ngValue]="null">Ninguno</option>
+                    @for (c of candidatos(i); track c.id) {
+                      <option [ngValue]="c.id">{{ c.codigo }}</option>
+                    }
+                  </select>
+                </td>
+                <td class="col-acciones">
+                  <button
+                    type="button"
+                    class="boton boton-texto boton-pequeno boton-peligro"
+                    [disabled]="detalles.length === 1"
+                    (click)="quitarFila(i)"
+                  >
+                    <svg lucideTrash aria-hidden="true"></svg>
+                    Quitar
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <button type="button" class="boton" (click)="agregarFila()">
+          <svg lucidePlus aria-hidden="true"></svg>
+          Agregar curso
+        </button>
+      </div>
+
+      <div class="rejilla rejilla-3">
+        <div class="indicador">
+          <span class="valor">{{ filas().length }}</span>
+          <span class="etiqueta">Cursos</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ totalCreditos() }}</span>
+          <span class="etiqueta">Créditos</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ porCiclo().length }}</span>
+          <span class="etiqueta">Ciclos</span>
+        </div>
+      </div>
+      @if (porCiclo().length) {
+        <div>
+          <p class="texto-pequeno texto-secundario">Créditos por ciclo (entre {{ minCiclo }} y {{ maxCiclo }}):</p>
+          <ul class="lista-cursos">
+            @for (c of porCiclo(); track c.ciclo) {
+              <li [class.texto-error]="c.fueraDeRango">
+                Ciclo {{ c.ciclo }}: {{ c.creditos }} créditos{{ c.fueraDeRango ? ' (fuera del rango)' : '' }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="guardando() || hayCicloInvalido()">
+        {{ guardando() ? 'Registrando…' : 'Registrar malla' }}
+      </button>
+      <a class="boton" routerLink="/academico/planes">Cancelar</a>
+    </footer>
+  </form>
+</section>

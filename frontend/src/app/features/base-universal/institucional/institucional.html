@@ -1,0 +1,143 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Base Universal</p>
+      <h1>Estructura institucional</h1>
+      <p class="descripcion">Sedes, facultades y escuelas profesionales. Cada alumno y cada malla pertenecen a una escuela.</p>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <ng-template #formulario let-nivel>
+    <form class="alta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+      <div class="campo">
+        <label [for]="'codigo-' + nivel">Código <span class="obligatorio">*</span></label>
+        <input [id]="'codigo-' + nivel" type="text" formControlName="codigo" maxlength="20" />
+        @if (mensaje('codigo'); as m) {
+          <span class="error-campo">{{ m }}</span>
+        }
+      </div>
+      <div class="campo">
+        <label [for]="'nombre-' + nivel">Nombre <span class="obligatorio">*</span></label>
+        <input [id]="'nombre-' + nivel" type="text" formControlName="nombre" maxlength="150" />
+        @if (mensaje('nombre'); as m) {
+          <span class="error-campo">{{ m }}</span>
+        }
+      </div>
+      @if (nivel === 'sede') {
+        <div class="campo">
+          <label for="direccion-sede">Dirección</label>
+          <input id="direccion-sede" type="text" formControlName="direccion" maxlength="255" />
+        </div>
+      }
+      @if (nivel === 'escuela') {
+        <div class="campo">
+          <label for="nivel-escuela">Nivel</label>
+          <select id="nivel-escuela" formControlName="nivel">
+            @for (n of niveles; track n) {
+              <option [ngValue]="n">{{ nivelEtiqueta[n] }}</option>
+            }
+          </select>
+        </div>
+      }
+      <div class="acciones">
+        <button type="submit" class="boton boton-primario boton-pequeno" [disabled]="guardando()">Registrar</button>
+        <button type="button" class="boton boton-texto boton-pequeno" (click)="abierto.set(null)">Cancelar</button>
+      </div>
+    </form>
+  </ng-template>
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando estructura…</p>
+  } @else {
+    <div class="niveles">
+      <article class="tarjeta">
+        <header>
+          <h2>Sedes</h2>
+          @if (auth.tieneRol(rolAdmin) && abierto() !== 'sede') {
+            <button type="button" class="boton boton-texto boton-pequeno" (click)="abrir('sede')">
+              <svg lucidePlus aria-hidden="true"></svg>
+              Agregar
+            </button>
+          }
+        </header>
+        <div class="cuerpo">
+          @if (abierto() === 'sede') {
+            <ng-container *ngTemplateOutlet="formulario; context: { $implicit: 'sede' }" />
+          }
+          <ul class="opciones">
+            @for (s of arbol(); track s.id) {
+              <li>
+                <button type="button" [class.activa]="s.id === sedeId()" [attr.aria-pressed]="s.id === sedeId()" (click)="seleccionarSede(s.id)">
+                  <span class="codigo">{{ s.codigo }}</span> {{ s.nombre }}
+                  <span class="texto-secundario texto-pequeno">{{ s.facultades.length }} facultad(es)</span>
+                </button>
+              </li>
+            } @empty {
+              <li><app-estado-vacio titulo="Sin sedes registradas" /></li>
+            }
+          </ul>
+        </div>
+      </article>
+
+      <article class="tarjeta">
+        <header>
+          <h2>Facultades{{ sede() ? ' de ' + sede()!.codigo : '' }}</h2>
+          @if (auth.tieneRol(rolAdmin) && sede() && abierto() !== 'facultad') {
+            <button type="button" class="boton boton-texto boton-pequeno" (click)="abrir('facultad')">
+              <svg lucidePlus aria-hidden="true"></svg>
+              Agregar
+            </button>
+          }
+        </header>
+        <div class="cuerpo">
+          @if (abierto() === 'facultad') {
+            <ng-container *ngTemplateOutlet="formulario; context: { $implicit: 'facultad' }" />
+          }
+          <ul class="opciones">
+            @for (f of sede()?.facultades ?? []; track f.id) {
+              <li>
+                <button type="button" [class.activa]="f.id === facultadId()" [attr.aria-pressed]="f.id === facultadId()" (click)="seleccionarFacultad(f.id)">
+                  <span class="codigo">{{ f.codigo }}</span> {{ f.nombre }}
+                  <span class="texto-secundario texto-pequeno">{{ f.escuelas.length }} escuela(s)</span>
+                </button>
+              </li>
+            } @empty {
+              <li><app-estado-vacio titulo="Sin facultades en la sede" /></li>
+            }
+          </ul>
+        </div>
+      </article>
+
+      <article class="tarjeta">
+        <header>
+          <h2>Escuelas{{ facultad() ? ' de ' + facultad()!.codigo : '' }}</h2>
+          @if (auth.tieneRol(rolAdmin) && facultad() && abierto() !== 'escuela') {
+            <button type="button" class="boton boton-texto boton-pequeno" (click)="abrir('escuela')">
+              <svg lucidePlus aria-hidden="true"></svg>
+              Agregar
+            </button>
+          }
+        </header>
+        <div class="cuerpo">
+          @if (abierto() === 'escuela') {
+            <ng-container *ngTemplateOutlet="formulario; context: { $implicit: 'escuela' }" />
+          }
+          <ul class="opciones">
+            @for (e of facultad()?.escuelas ?? []; track e.id) {
+              <li class="fija">
+                <span class="codigo">{{ e.codigo }}</span> {{ e.nombre }}
+                <span class="texto-secundario texto-pequeno">{{ etiquetaNivel(e.nivel) }}</span>
+              </li>
+            } @empty {
+              <li><app-estado-vacio titulo="Sin escuelas en la facultad" /></li>
+            }
+          </ul>
+        </div>
+      </article>
+    </div>
+  }
+</section>

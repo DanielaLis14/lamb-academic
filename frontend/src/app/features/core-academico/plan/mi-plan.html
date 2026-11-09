@@ -1,0 +1,98 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Matrícula</p>
+      <h1>Mi plan de estudios</h1>
+      <p class="descripcion">
+        Malla curricular vigente de tu escuela con tu avance. Un curso con prerrequisito se habilita cuando apruebas el
+        curso previo.
+      </p>
+    </div>
+    <a class="boton" routerLink="/matricula/inscripcion">Ir a inscripción</a>
+  </header>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando tu plan de estudios…</p>
+  } @else if (sinEscuela()) {
+    <div class="tarjeta">
+      <app-estado-vacio
+        titulo="Aún no tienes una escuela asignada"
+        descripcion="Solicita a la administración que registre tu escuela profesional para ver tu plan."
+      />
+    </div>
+  } @else if (plan(); as p) {
+    <div class="tarjeta">
+      <header>
+        <h2>{{ p.nombre }}</h2>
+        <span class="texto-secundario texto-pequeno">{{ p.codigo }} · versión {{ p.version }} · {{ p.escuelaNombre }}</span>
+      </header>
+      <div class="cuerpo indicadores rejilla">
+        <div class="indicador">
+          <span class="valor">{{ creditosAprobados() }} / {{ p.totalCreditos }}</span>
+          <span class="etiqueta">Créditos aprobados</span>
+          <div class="progreso">
+            <span class="barra" role="progressbar" aria-label="Avance del plan" [attr.aria-valuenow]="porcentaje()"
+              aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="porcentaje()"></span></span>
+            <span class="texto-pequeno texto-secundario">{{ porcentaje() }} % del plan</span>
+          </div>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ cursosEnCurso() }}</span>
+          <span class="etiqueta">Cursos en curso</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ p.totalCursos }}</span>
+          <span class="etiqueta">Cursos del plan en {{ ciclos().length }} ciclos</span>
+        </div>
+      </div>
+    </div>
+
+    @for (c of ciclos(); track c.ciclo) {
+      <article class="tarjeta">
+        <header>
+          <h2>Ciclo {{ c.ciclo }}</h2>
+          <span class="texto-secundario texto-pequeno">{{ c.creditos }} créditos</span>
+        </header>
+        <div class="tabla-contenedor">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Curso</th>
+                <th class="monto">Créditos</th>
+                <th>Tipo</th>
+                <th>Prerrequisito</th>
+                <th>Situación</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of c.cursos; track d.id) {
+                <tr>
+                  <td class="celda-principal num">{{ d.cursoCodigo }}</td>
+                  <td>{{ d.cursoNombre }}</td>
+                  <td class="monto">{{ d.creditos }}</td>
+                  <td>{{ d.tipo === 'OBLIGATORIO' ? 'Obligatorio' : 'Electivo' }}</td>
+                  <td class="num">{{ d.prerrequisitoCodigo ?? '—' }}</td>
+                  <td>
+                    <span class="etiqueta-estado" [class]="'etiqueta-estado ' + claseAvance[d.avance]">{{ textoAvance[d.avance] }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    }
+  } @else if (!error()) {
+    <div class="tarjeta">
+      <app-estado-vacio
+        titulo="Tu escuela no tiene un plan de estudios vigente"
+        descripcion="La coordinación académica debe registrar la malla curricular vigente."
+      />
+    </div>
+  }
+</section>

@@ -1,0 +1,152 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Finanzas</p>
+      <h1>Cargos de estudiantes</h1>
+      <p class="descripcion">
+        Deuda de cada estudiante con sus cuotas y pagos. Los cargos de matrícula los genera el registro de la matrícula.
+      </p>
+    </div>
+    @if (esCaja()) {
+      <a class="boton boton-primario" routerLink="/finanzas/cargos/nuevo">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nuevo cargo
+      </a>
+    }
+  </header>
+
+  @if (resumen().length) {
+    <div class="tarjeta">
+      <div class="cuerpo indicadores rejilla rejilla-3">
+        @for (r of resumen(); track r.estado) {
+          <div class="indicador">
+            <span class="valor">{{ r.cantidad }}</span>
+            <span class="etiqueta"><app-etiqueta-estado [estado]="r.estado" /></span>
+            <span class="etiqueta">
+              {{ r.montoTotal | currency: 'PEN' : 'S/' : '1.2-2' }} · saldo {{ r.saldoPendiente | currency: 'PEN' : 'S/' : '1.2-2' }}
+            </span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <form class="tarjeta" aria-label="Filtros de cargos" (submit)="$event.preventDefault()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-alumno">Estudiante</label>
+        <select id="f-alumno" name="alumno" [(ngModel)]="estudianteFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (a of alumnos(); track a.id) {
+            <option [ngValue]="a.id">{{ a.codigoEstudiante }} · {{ a.persona.nombreCompleto }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-periodo">Periodo</label>
+        <select id="f-periodo" name="periodo" [(ngModel)]="periodoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (p of periodos(); track p.id) {
+            <option [ngValue]="p.id">{{ p.codigo }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-estado">Estado</label>
+        <select id="f-estado" name="estado" [(ngModel)]="estadoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (e of estados; track e) {
+            <option [ngValue]="e">{{ nombreEstado[e] }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-origen">Origen</label>
+        <select id="f-origen" name="origen" [(ngModel)]="origenFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (o of origenes; track o) {
+            <option [ngValue]="o">{{ nombreOrigen[o] }}</option>
+          }
+        </select>
+      </div>
+    </div>
+  </form>
+
+  @if (saldo(); as s) {
+    <div class="tarjeta">
+      <header><h2>Saldo de {{ alumno(s.estudianteId) }}</h2></header>
+      <div class="cuerpo indicadores rejilla rejilla-3">
+        <div class="indicador">
+          <span class="valor">{{ s.saldoPendiente | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+          <span class="etiqueta">Saldo pendiente en {{ s.totalCargosPendientes }} cargo(s)</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ s.totalPagado | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+          <span class="etiqueta">Pagado de {{ s.deudaTotal | currency: 'PEN' : 'S/' : '1.2-2' }}</span>
+        </div>
+        <div class="indicador">
+          <span class="valor" [class.texto-error]="s.cuotasVencidas > 0">{{ s.cuotasVencidas }}</span>
+          <span class="etiqueta">Cuotas vencidas</span>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando cargos…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Número</th>
+              <th>Estudiante</th>
+              <th>Periodo</th>
+              <th>Origen</th>
+              <th>Emisión</th>
+              <th class="num">Cuotas</th>
+              <th class="monto">Total</th>
+              <th class="monto">Saldo</th>
+              <th>Estado</th>
+              <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of cargos(); track c.id) {
+              <tr>
+                <td class="celda-principal num">{{ c.numeroCargo }}</td>
+                <td>{{ alumno(c.estudianteId) }}</td>
+                <td>{{ periodo(c.periodoId) }}</td>
+                <td>{{ nombreOrigen[c.procesoOrigen] }}</td>
+                <td class="num">{{ c.fechaEmision | date: 'dd/MM/yyyy' }}</td>
+                <td class="num">{{ c.numeroCuotas }}</td>
+                <td class="monto">{{ c.montoTotal | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                <td class="monto">{{ c.saldoPendiente | currency: 'PEN' : 'S/' : '1.2-2' }}</td>
+                <td><app-etiqueta-estado [estado]="c.estado" /></td>
+                <td class="col-acciones">
+                  <a class="boton boton-texto boton-pequeno" [routerLink]="['/finanzas/cargos', c.id]">
+                    <svg lucideEye aria-hidden="true"></svg>
+                    Ver
+                  </a>
+                </td>
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="10">
+                    <app-estado-vacio titulo="No hay cargos con esos filtros" />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>

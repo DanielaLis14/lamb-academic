@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: lamb-academic
+  profiles:
+    active: dev
+  # Credenciales locales fuera de Git: backend/.env (copiar desde backend/.env.example).
+  # Si el archivo no existe, se usan las variables de entorno del sistema.
+  config:
+    import: optional:file:.env[.properties]
+  # Documentos de expedientes: 5 MB por archivo (lamb.archivos.tamano-maximo) y hasta 20 por expediente.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 60MB
+
+lamb:
+  archivos:
+    # Almacen privado, fuera de las carpetas que sirve la aplicacion. Nunca dentro del proyecto.
+    directorio: ${LAMB_ARCHIVOS_DIR:${user.home}/lamb-academic-archivos}
+    tamano-maximo: 5MB

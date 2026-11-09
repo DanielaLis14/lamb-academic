@@ -1,0 +1,71 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/alumnos">Alumnos</a></p>
+      <h1>{{ id() ? 'Editar alumno' : 'Nuevo alumno' }}</h1>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (loading()) {
+        <p class="estado-carga">Cargando datos…</p>
+      }
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="personaId">Persona <span class="obligatorio">*</span></label>
+          @if (alumno(); as a) {
+            <input id="personaId" type="text" [value]="a.persona.nombreCompleto + ' — ' + a.persona.numeroDocumento" disabled />
+            <span class="ayuda">La persona de un alumno no se cambia.</span>
+          } @else {
+            <select id="personaId" formControlName="personaId">
+              <option [ngValue]="null">Selecciona una persona</option>
+              @for (p of disponibles(); track p.id) {
+                <option [ngValue]="p.id">{{ p.nombreCompleto }} — {{ p.numeroDocumento }}</option>
+              }
+            </select>
+            @if (!loading() && !disponibles().length && !errorCarga()) {
+              <span class="ayuda">
+                Todas las personas de tipo Alumno ya tienen registro. Registra primero la persona en
+                <a routerLink="/personas/nueva">Personas</a>.
+              </span>
+            } @else {
+              <span class="ayuda">Solo personas activas de tipo Alumno que aún no son alumnos.</span>
+            }
+          }
+          @if (mensajeValidacion('personaId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="codigoEstudiante">Código de estudiante <span class="obligatorio">*</span></label>
+          <input id="codigoEstudiante" type="text" formControlName="codigoEstudiante" maxlength="20" placeholder="202610001" />
+          @if (mensajeValidacion('codigoEstudiante'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="fechaIngreso">Fecha de ingreso <span class="obligatorio">*</span></label>
+          <input id="fechaIngreso" type="date" formControlName="fechaIngreso" [max]="hoy" />
+          @if (mensajeValidacion('fechaIngreso'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+      @if (!id()) {
+        <p class="texto-secundario texto-pequeno">El alumno se registra en estado Activo.</p>
+      }
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="loading() || errorCarga()">Guardar</button>
+      <a class="boton" routerLink="/alumnos">Cancelar</a>
+    </footer>
+  </form>
+</section>

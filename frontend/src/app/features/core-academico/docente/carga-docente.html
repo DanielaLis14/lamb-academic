@@ -1,0 +1,109 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      @if (propia) {
+        <p class="migas">Mi docencia</p>
+        <h1>Mi carga lectiva</h1>
+        <p class="descripcion">Las secciones que dictas en el periodo, con su horario, aulas y estudiantes inscritos.</p>
+      } @else {
+        <p class="migas"><a routerLink="/academico/docentes">Plana docente</a></p>
+        <h1>Carga lectiva{{ carga() ? ' de ' + carga()!.docenteNombre : '' }}</h1>
+        <p class="descripcion">Secciones no canceladas que el docente dicta en el periodo y sus horas semanales.</p>
+      }
+    </div>
+  </header>
+
+  <form class="tarjeta" aria-label="Periodo de la carga" (submit)="$event.preventDefault()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-periodo">Periodo</label>
+        <select id="f-periodo" name="periodo" [(ngModel)]="periodoId" (ngModelChange)="cargar()">
+          @for (p of periodos(); track p.id) {
+            <option [ngValue]="p.id">{{ p.codigo }} · {{ p.nombre }}</option>
+          }
+        </select>
+      </div>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="estado-carga">Cargando carga lectiva…</p>
+  } @else if (!periodos().length && !error()) {
+    <div class="tarjeta">
+      <app-estado-vacio titulo="No hay periodos académicos registrados" />
+    </div>
+  } @else if (carga(); as c) {
+    <div class="tarjeta">
+      <div class="cuerpo indicadores rejilla rejilla-3">
+        <div class="indicador">
+          <span class="valor">{{ c.totalSecciones }}</span>
+          <span class="etiqueta">Secciones</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ c.horasSemanales | number: '1.0-1' }}</span>
+          <span class="etiqueta">Horas semanales</span>
+        </div>
+        <div class="indicador">
+          <span class="valor">{{ totalInscritos() }}</span>
+          <span class="etiqueta">Estudiantes inscritos</span>
+        </div>
+      </div>
+    </div>
+
+    @if (c.secciones.length) {
+      <div class="tarjeta">
+        <div class="cuerpo tabla-contenedor">
+          <app-horario-semanal [bloques]="bloques()" [mostrarLeyenda]="true" titulo="Horario semanal" />
+        </div>
+      </div>
+
+      <article class="tarjeta">
+        <header><h2>Secciones</h2></header>
+        <div class="tabla-contenedor">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th>Curso</th>
+                <th>Grupo</th>
+                <th>Horario</th>
+                <th class="num">Inscritos</th>
+                <th class="num">Vacantes</th>
+                <th>Estado</th>
+                <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of c.secciones; track s.id) {
+                <tr>
+                  <td class="celda-principal">{{ s.curso.codigo }} · {{ s.curso.nombre }}</td>
+                  <td>{{ s.grupo }}</td>
+                  <td class="texto-pequeno">{{ resumenHorario(s.horarios) }}</td>
+                  <td class="num">{{ s.cuposOcupados }}</td>
+                  <td class="num">{{ s.vacantesDisponibles }} de {{ s.limiteVacantes }}</td>
+                  <td><app-etiqueta-estado [estado]="s.estado" /></td>
+                  <td class="col-acciones">
+                    <a class="boton boton-texto boton-pequeno" [routerLink]="[rutaInscritos, s.id, 'inscritos']">
+                      <svg lucideUsers aria-hidden="true"></svg>
+                      Estudiantes
+                    </a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    } @else {
+      <div class="tarjeta">
+        <app-estado-vacio
+          titulo="Sin secciones en este periodo"
+          [descripcion]="propia ? 'Coordinación académica aún no te asignó secciones en el periodo.' : 'El docente no dicta secciones en el periodo.'"
+        />
+      </div>
+    }
+  }
+</section>

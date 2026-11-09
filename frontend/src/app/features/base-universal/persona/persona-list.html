@@ -1,0 +1,122 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Base Universal</p>
+      <h1>Personas</h1>
+      <p class="descripcion">
+        Registro único de alumnos, docentes y personal. Una baja deja a la persona inactiva sin borrar su historia.
+      </p>
+    </div>
+    @if (auth.tieneRol(rolAdmin)) {
+      <a class="boton boton-primario" routerLink="/personas/nueva">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nueva persona
+      </a>
+    }
+  </header>
+
+  <form class="tarjeta" aria-label="Filtros de personas" (ngSubmit)="cargar()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-tipo">Tipo</label>
+        <select id="f-tipo" name="tipo" [(ngModel)]="tipoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (t of tipos; track t) {
+            <option [ngValue]="t">{{ nombreTipo[t] }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-activo">Situación</label>
+        <select id="f-activo" name="activo" [(ngModel)]="activoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="true">Activas</option>
+          <option [ngValue]="false">Inactivas</option>
+          <option [ngValue]="null">Todas</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-escuela">Escuela</label>
+        <select id="f-escuela" name="escuela" [(ngModel)]="escuelaFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todas</option>
+          @for (e of escuelas(); track e.id) {
+            <option [ngValue]="e.id">{{ e.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-texto">Buscar</label>
+        <input id="f-texto" name="texto" type="search" placeholder="Nombre o documento" [(ngModel)]="texto" />
+      </div>
+      <button type="submit" class="boton">Buscar</button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando personas…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Documento</th>
+              <th>Apellidos y nombres</th>
+              <th>Tipo</th>
+              <th>Escuela</th>
+              <th>Correo</th>
+              <th>Situación</th>
+              @if (auth.tieneRol(rolAdmin)) {
+                <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (persona of personas(); track persona.id) {
+              <tr>
+                <td class="num">{{ persona.tipoDocumento }} {{ persona.numeroDocumento }}</td>
+                <td class="celda-principal">{{ persona.nombreCompleto }}</td>
+                <td>{{ nombreTipo[persona.tipoPersona] }}</td>
+                <td>{{ persona.escuelaNombre ?? '—' }}</td>
+                <td>{{ persona.email ?? '—' }}</td>
+                <td>
+                  <span class="etiqueta-estado" [class.estado-activo]="persona.activo" [class.estado-neutro]="!persona.activo">
+                    {{ persona.activo ? 'Activa' : 'Inactiva' }}
+                  </span>
+                </td>
+                @if (auth.tieneRol(rolAdmin)) {
+                  <td class="col-acciones">
+                    <a class="boton boton-texto boton-pequeno" [routerLink]="['/personas', persona.id, 'editar']">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Editar
+                    </a>
+                    @if (persona.activo) {
+                      <button type="button" class="boton boton-texto boton-pequeno boton-peligro" (click)="desactivar(persona)">
+                        <svg lucideUserX aria-hidden="true"></svg>
+                        Dar de baja
+                      </button>
+                    }
+                  </td>
+                }
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="7">
+                    <app-estado-vacio titulo="No hay personas con esos filtros" descripcion="Cambia los filtros o la búsqueda." />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (personas().length) {
+        <p class="cuerpo texto-secundario texto-pequeno">{{ personas().length }} persona(s)</p>
+      }
+    }
+  </div>
+</section>

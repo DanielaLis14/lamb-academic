@@ -1,0 +1,95 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Finanzas</p>
+      <h1>Conceptos de pago</h1>
+      <p class="descripcion">
+        Conceptos con los que el sistema calcula los cargos. Los marcados para matrícula se aplican al registrar
+        cada matrícula.
+      </p>
+    </div>
+    @if (auth.tieneRol(rolAdmin)) {
+      <a class="boton boton-primario" routerLink="/finanzas/conceptos/nuevo">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nuevo concepto
+      </a>
+    }
+  </header>
+
+  <div class="tarjeta">
+    <div class="cuerpo barra-filtros">
+      <label class="casilla">
+        <input type="checkbox" [checked]="soloActivos()" (change)="soloActivos.set($any($event.target).checked)" />
+        Solo conceptos activos
+      </label>
+    </div>
+  </div>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando conceptos…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nombre</th>
+              <th>Cálculo</th>
+              <th class="monto">Monto</th>
+              <th>Matrícula</th>
+              <th>Situación</th>
+              @if (auth.tieneRol(rolAdmin)) {
+                <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of visibles(); track c.id) {
+              <tr>
+                <td class="celda-principal num">{{ c.codigo }}</td>
+                <td>{{ c.nombre }}</td>
+                <td>{{ nombreCalculo[c.tipoCalculo] }}</td>
+                <td class="monto">
+                  {{ c.monto | currency: 'PEN' : 'S/' : '1.2-2' }}{{ c.tipoCalculo === 'POR_CREDITO' ? ' por crédito' : '' }}
+                </td>
+                <td>{{ c.aplicaMatricula ? 'Se aplica' : 'No' }}</td>
+                <td>
+                  <span class="etiqueta-estado" [class.estado-activo]="c.activo" [class.estado-neutro]="!c.activo">
+                    {{ c.activo ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                @if (auth.tieneRol(rolAdmin)) {
+                  <td class="col-acciones">
+                    <a class="boton boton-texto boton-pequeno" [routerLink]="['/finanzas/conceptos', c.id, 'editar']">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Editar
+                    </a>
+                    @if (c.activo) {
+                      <button type="button" class="boton boton-texto boton-pequeno boton-peligro" (click)="desactivar(c)">
+                        <svg lucideBan aria-hidden="true"></svg>
+                        Desactivar
+                      </button>
+                    }
+                  </td>
+                }
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="7">
+                    <app-estado-vacio titulo="No hay conceptos de pago" descripcion="Un administrador debe configurar los conceptos." />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>

@@ -1,0 +1,113 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Gestión académica</p>
+      <h1>Cursos</h1>
+      <p class="descripcion">
+        Catálogo de cursos que se programan en secciones y se incluyen en las mallas curriculares.
+      </p>
+    </div>
+    @if (auth.tieneRol(rolAdmin)) {
+      <a class="boton boton-primario" routerLink="/academico/cursos/nuevo">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nuevo curso
+      </a>
+    }
+  </header>
+
+  <form class="tarjeta" aria-label="Filtros de cursos" (ngSubmit)="cargar()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-activo">Situación</label>
+        <select id="f-activo" name="activo" [(ngModel)]="activoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="true">Activos</option>
+          <option [ngValue]="false">Inactivos</option>
+          <option [ngValue]="null">Todos</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-creditos">Créditos</label>
+        <select id="f-creditos" name="creditos" [(ngModel)]="creditosFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (c of opcionesCreditos; track c) {
+            <option [ngValue]="c">{{ c }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-texto">Buscar</label>
+        <input id="f-texto" name="texto" type="search" placeholder="Código o nombre" [(ngModel)]="texto" />
+      </div>
+      <button type="submit" class="boton">Buscar</button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando cursos…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nombre</th>
+              <th class="num">Créditos</th>
+              <th class="num">Horas teóricas</th>
+              <th class="num">Horas prácticas</th>
+              <th>Situación</th>
+              @if (auth.tieneRol(rolAdmin)) {
+                <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (curso of cursos(); track curso.id) {
+              <tr>
+                <td class="celda-principal num">{{ curso.codigo }}</td>
+                <td>{{ curso.nombre }}</td>
+                <td class="num">{{ curso.creditos }}</td>
+                <td class="num">{{ curso.horasTeoricas ?? '—' }}</td>
+                <td class="num">{{ curso.horasPracticas ?? '—' }}</td>
+                <td>
+                  <span class="etiqueta-estado" [class.estado-activo]="curso.activo" [class.estado-neutro]="!curso.activo">
+                    {{ curso.activo ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                @if (auth.tieneRol(rolAdmin)) {
+                  <td class="col-acciones">
+                    <a class="boton boton-texto boton-pequeno" [routerLink]="['/academico/cursos', curso.id, 'editar']">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Editar
+                    </a>
+                    @if (curso.activo) {
+                      <button type="button" class="boton boton-texto boton-pequeno boton-peligro" (click)="desactivar(curso)">
+                        <svg lucideBan aria-hidden="true"></svg>
+                        Desactivar
+                      </button>
+                    }
+                  </td>
+                }
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="7">
+                    <app-estado-vacio titulo="No hay cursos con esos filtros" descripcion="Cambia los filtros o la búsqueda." />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (cursos().length) {
+        <p class="cuerpo texto-secundario texto-pequeno">{{ cursos().length }} curso(s) · {{ totalCreditos() }} créditos</p>
+      }
+    }
+  </div>
+</section>

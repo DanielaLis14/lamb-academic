@@ -1,0 +1,120 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/expedientes">{{ esCoordinacion() ? 'Expedientes' : 'Mis expedientes' }}</a></p>
+      <h1>Nuevo expediente</h1>
+      <p class="descripcion">
+        El expediente y sus archivos se registran juntos: si un archivo no es válido, no se guarda nada.
+      </p>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="codigoTramite">Código de trámite <span class="obligatorio">*</span></label>
+          <input id="codigoTramite" type="text" formControlName="codigoTramite" maxlength="50" />
+          <span class="ayuda">Se sugiere uno con la fecha y hora; debe ser único.</span>
+          @if (mensaje('codigoTramite'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        @if (esCoordinacion()) {
+          <div class="campo">
+            <label for="personaId">Titular <span class="obligatorio">*</span></label>
+            <select id="personaId" formControlName="personaId">
+              <option [ngValue]="null">Selecciona la persona</option>
+              @for (p of personas(); track p.id) {
+                <option [ngValue]="p.id">{{ p.nombreCompleto }} — {{ p.numeroDocumento }}</option>
+              }
+            </select>
+            @if (mensaje('personaId'); as m) {
+              <span class="error-campo">{{ m }}</span>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="campo">
+        <label for="asunto">Asunto <span class="obligatorio">*</span></label>
+        <input id="asunto" type="text" formControlName="asunto" maxlength="255" placeholder="Constancia de estudios" />
+        @if (mensaje('asunto'); as m) {
+          <span class="error-campo">{{ m }}</span>
+        }
+      </div>
+
+      <h2>Documentos</h2>
+      <p class="texto-secundario texto-pequeno">
+        Archivos PDF, PNG o JPG de hasta 5 MB cada uno. Se guardan en el almacén privado de la universidad y solo los
+        descargan el titular y la coordinación.
+      </p>
+      @if (documentos.hasError('archivoRepetido')) {
+        <p class="mensaje mensaje-error" role="alert">Hay archivos con el mismo nombre entre los documentos.</p>
+      }
+
+      <div class="tabla-contenedor">
+        <table class="tabla tabla-interna" formArrayName="documentos">
+          <thead>
+            <tr>
+              <th>Documento</th>
+              <th>Archivo</th>
+              <th class="col-acciones"><span class="visualmente-oculto">Quitar</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (linea of documentos.controls; track linea; let i = $index) {
+              <tr [formGroupName]="i">
+                <td>
+                  <label class="visualmente-oculto" [for]="'doc-nombre-' + i">Nombre del documento {{ i + 1 }}</label>
+                  <input [id]="'doc-nombre-' + i" type="text" formControlName="nombre" maxlength="150" placeholder="DNI escaneado" />
+                  @if (mensajeLinea(i, 'nombre'); as m) {
+                    <span class="error-campo">{{ m }}</span>
+                  }
+                </td>
+                <td>
+                  <label class="visualmente-oculto" [for]="'doc-archivo-' + i">Archivo del documento {{ i + 1 }}</label>
+                  <input [id]="'doc-archivo-' + i" type="file" [accept]="acepta" (change)="elegirArchivo(i, $event)" />
+                  @if (linea.controls.archivo.value; as archivo) {
+                    <span class="texto-pequeno texto-secundario">{{ archivo.name }} · {{ tamanoLegible(archivo.size) }}</span>
+                  }
+                  @if (mensajeLinea(i, 'archivo'); as m) {
+                    <span class="error-campo">{{ m }}</span>
+                  }
+                </td>
+                <td class="col-acciones">
+                  <button
+                    type="button"
+                    class="boton boton-texto boton-pequeno boton-peligro"
+                    [disabled]="documentos.length === 1"
+                    (click)="quitarLinea(i)"
+                  >
+                    <svg lucideTrash aria-hidden="true"></svg>
+                    Quitar
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="acciones">
+        <button type="button" class="boton" [disabled]="documentos.length >= maxDocumentos" (click)="agregarLinea()">
+          <svg lucidePlus aria-hidden="true"></svg>
+          Agregar documento
+        </button>
+        <span class="texto-secundario texto-pequeno">{{ documentos.length }} de {{ maxDocumentos }} documentos</span>
+      </div>
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="guardando()">
+        {{ guardando() ? 'Registrando…' : 'Registrar expediente' }}
+      </button>
+      <a class="boton" routerLink="/expedientes">Cancelar</a>
+    </footer>
+  </form>
+</section>

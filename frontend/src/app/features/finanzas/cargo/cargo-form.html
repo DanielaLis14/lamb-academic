@@ -1,0 +1,119 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/finanzas/cargos">Cargos</a></p>
+      <h1>Nuevo cargo</h1>
+      <p class="descripcion">
+        Cargo por trámite u otro concepto, con sus cuotas en una sola operación. Los cargos de matrícula se generan al
+        registrar la matrícula.
+      </p>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (cargando()) {
+        <p class="estado-carga">Cargando datos…</p>
+      }
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="estudianteId">Estudiante <span class="obligatorio">*</span></label>
+          <select id="estudianteId" formControlName="estudianteId">
+            <option [ngValue]="null">Selecciona el estudiante</option>
+            @for (a of alumnos(); track a.id) {
+              <option [ngValue]="a.id">{{ a.codigoEstudiante }} · {{ a.persona.nombreCompleto }}</option>
+            }
+          </select>
+          @if (mensaje('estudianteId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="periodoId">Periodo <span class="obligatorio">*</span></label>
+          <select id="periodoId" formControlName="periodoId">
+            <option [ngValue]="null">Selecciona el periodo</option>
+            @for (p of periodos(); track p.id) {
+              <option [ngValue]="p.id">{{ p.codigo }} · {{ p.nombre }}</option>
+            }
+          </select>
+          @if (mensaje('periodoId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="procesoOrigen">Origen <span class="obligatorio">*</span></label>
+          <select id="procesoOrigen" formControlName="procesoOrigen">
+            @for (o of origenes; track o) {
+              <option [ngValue]="o">{{ nombreOrigen[o] }}</option>
+            }
+          </select>
+        </div>
+        <div class="campo">
+          <label for="referenciaId">Referencia</label>
+          <input id="referenciaId" type="number" formControlName="referenciaId" min="1" />
+          <span class="ayuda">Número del trámite que origina el cargo; no se repite por origen.</span>
+          @if (mensaje('referenciaId'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="numeroCuotas">Cuotas <span class="obligatorio">*</span></label>
+          <input id="numeroCuotas" type="number" formControlName="numeroCuotas" min="1" max="12" />
+          @if (mensaje('numeroCuotas'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <fieldset class="campo">
+        <legend>Conceptos de pago <span class="obligatorio">*</span></legend>
+        @for (c of conceptos(); track c.id) {
+          <label class="casilla">
+            <input type="checkbox" [checked]="elegidos().has(c.codigo)" (change)="alternar(c.codigo)" />
+            {{ c.codigo }} · {{ c.nombre }} —
+            {{ c.monto | currency: 'PEN' : 'S/' : '1.2-2' }}{{ c.tipoCalculo === 'POR_CREDITO' ? ' por crédito' : '' }}
+          </label>
+        } @empty {
+          @if (!cargando()) {
+            <p class="texto-secundario">No hay conceptos activos. Un administrador debe configurarlos.</p>
+          }
+        }
+      </fieldset>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="totalCreditos">Créditos{{ requiereCreditos() ? ' *' : '' }}</label>
+          <input id="totalCreditos" type="number" formControlName="totalCreditos" min="1" max="40" />
+          <span class="ayuda">Necesario si algún concepto se cobra por crédito.</span>
+          @if (mensaje('totalCreditos'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="observacion">Observación</label>
+          <input id="observacion" type="text" formControlName="observacion" maxlength="500" />
+        </div>
+      </div>
+
+      @if (seleccion().length) {
+        <p class="mensaje mensaje-info" role="status">
+          Estimado: {{ estimado() | currency: 'PEN' : 'S/' : '1.2-2' }}. El monto y las cuotas definitivos los calcula
+          el sistema al registrar el cargo.
+        </p>
+      }
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="guardando() || cargando()">
+        {{ guardando() ? 'Registrando…' : 'Registrar cargo' }}
+      </button>
+      <a class="boton" routerLink="/finanzas/cargos">Cancelar</a>
+    </footer>
+  </form>
+</section>

@@ -1,0 +1,67 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas"><a routerLink="/academico/cursos">Cursos</a></p>
+      <h1>{{ id() ? 'Editar curso' : 'Nuevo curso' }}</h1>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (loading() && id()) {
+        <p class="estado-carga">Cargando curso…</p>
+      }
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+      @if (inactivo()) {
+        <p class="mensaje mensaje-info" role="status">Este curso está inactivo: no se ofrece en nuevas secciones.</p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="codigo">Código <span class="obligatorio">*</span></label>
+          <input id="codigo" type="text" formControlName="codigo" maxlength="20" placeholder="IS301" />
+          @if (mensajeValidacion('codigo'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="nombre">Nombre <span class="obligatorio">*</span></label>
+          <input id="nombre" type="text" formControlName="nombre" maxlength="150" />
+          @if (mensajeValidacion('nombre'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="creditos">Créditos <span class="obligatorio">*</span></label>
+          <input id="creditos" type="number" formControlName="creditos" min="1" max="10" step="1" />
+          @if (mensajeValidacion('creditos'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="horasTeoricas">Horas teóricas</label>
+          <input id="horasTeoricas" type="number" formControlName="horasTeoricas" min="0" max="20" step="1" />
+          @if (mensajeValidacion('horasTeoricas'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="horasPracticas">Horas prácticas</label>
+          <input id="horasPracticas" type="number" formControlName="horasPracticas" min="0" max="20" step="1" />
+          @if (mensajeValidacion('horasPracticas'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="loading() || errorCarga()">Guardar</button>
+      <a class="boton" routerLink="/academico/cursos">Cancelar</a>
+    </footer>
+  </form>
+</section>

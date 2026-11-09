@@ -1,0 +1,144 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Gestión académica</p>
+      <h1>Mallas curriculares</h1>
+      <p class="descripcion">
+        Planes de estudio por escuela con sus cursos por ciclo y prerrequisitos. La matrícula usa la versión vigente.
+      </p>
+    </div>
+    @if (auth.tieneRol(rolAdmin)) {
+      <a class="boton boton-primario" routerLink="/academico/planes/nuevo">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nueva malla
+      </a>
+    }
+  </header>
+
+  @if (resumen().length) {
+    <div class="tarjeta">
+      <header><h2>Resumen por escuela</h2></header>
+      <div class="cuerpo indicadores rejilla rejilla-3">
+        @for (r of resumen(); track r.idEscuela + r.estado) {
+          <div class="indicador">
+            <span class="valor">{{ r.cantidadPlanes }}</span>
+            <span class="etiqueta">{{ r.escuela }} · <app-etiqueta-estado [estado]="r.estado" /></span>
+            <span class="etiqueta">{{ r.totalCreditos }} créditos en total</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <form class="tarjeta" aria-label="Filtros de mallas" (ngSubmit)="cargar()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-escuela">Escuela</label>
+        <select id="f-escuela" name="escuela" [(ngModel)]="escuelaFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todas</option>
+          @for (e of escuelas(); track e.id) {
+            <option [ngValue]="e.id">{{ e.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-estado">Estado</label>
+        <select id="f-estado" name="estado" [(ngModel)]="estadoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="null">Todos</option>
+          @for (e of estados; track e) {
+            <option [ngValue]="e">{{ e === 'VIGENTE' ? 'Vigente' : 'Obsoleto' }}</option>
+          }
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-anio">Año</label>
+        <input id="f-anio" name="anio" type="number" min="2000" max="2100" [(ngModel)]="anioFiltro" />
+      </div>
+      <div class="campo">
+        <label for="f-texto">Buscar</label>
+        <input id="f-texto" name="texto" type="search" placeholder="Código o nombre" [(ngModel)]="texto" />
+      </div>
+      <div class="campo">
+        <label for="f-orden">Ordenar por</label>
+        <select id="f-orden" name="orden" [(ngModel)]="orden" (ngModelChange)="cargar()">
+          <option value="anio">Año</option>
+          <option value="codigo">Código</option>
+          <option value="nombre">Nombre</option>
+          <option value="totalCreditos">Créditos</option>
+          <option value="version">Versión</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-dir">Dirección</label>
+        <select id="f-dir" name="dir" [(ngModel)]="direccion" (ngModelChange)="cargar()">
+          <option value="desc">Descendente</option>
+          <option value="asc">Ascendente</option>
+        </select>
+      </div>
+      <button type="submit" class="boton">Buscar</button>
+      <button type="button" class="boton boton-texto" (click)="limpiar()">Limpiar</button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando mallas…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Nombre</th>
+              <th>Escuela</th>
+              <th class="num">Año</th>
+              <th class="num">Versión</th>
+              <th>Estado</th>
+              <th class="num">Cursos</th>
+              <th class="num">Créditos</th>
+              <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (plan of planes(); track plan.id) {
+              <tr>
+                <td class="celda-principal num">{{ plan.codigo }}</td>
+                <td>{{ plan.nombre }}</td>
+                <td>{{ plan.escuelaNombre ?? '—' }}</td>
+                <td class="num">{{ plan.anio }}</td>
+                <td class="num">{{ plan.version }}</td>
+                <td><app-etiqueta-estado [estado]="plan.estado" /></td>
+                <td class="num">{{ plan.totalCursos }}</td>
+                <td class="num">{{ plan.totalCreditos }}</td>
+                <td class="col-acciones">
+                  <a class="boton boton-texto boton-pequeno" [routerLink]="['/academico/planes', plan.id]">
+                    <svg lucideEye aria-hidden="true"></svg>
+                    Ver malla
+                  </a>
+                  @if (plan.estado === 'VIGENTE' && auth.tieneRol(rolAdmin)) {
+                    <button type="button" class="boton boton-texto boton-pequeno" (click)="versionar(plan)">
+                      <svg lucideCopyPlus aria-hidden="true"></svg>
+                      Versionar
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="9">
+                    <app-estado-vacio titulo="No hay mallas con esos filtros" descripcion="Cambia los filtros o la búsqueda." />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>

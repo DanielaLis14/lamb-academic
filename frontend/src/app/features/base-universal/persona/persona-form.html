@@ -1,0 +1,133 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">
+        <a [routerLink]="volverA">{{ esDocente ? 'Plana docente' : 'Personas' }}</a>
+      </p>
+      <h1>
+        @if (esDocente) {
+          {{ id() ? 'Editar docente' : 'Nuevo docente' }}
+        } @else {
+          {{ id() ? 'Editar persona' : 'Nueva persona' }}
+        }
+      </h1>
+    </div>
+  </header>
+
+  <form class="tarjeta formulario-tarjeta" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+    <div class="cuerpo formulario">
+      @if (loading() && id()) {
+        <p class="estado-carga">Cargando datos…</p>
+      }
+      @if (error()) {
+        <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+      }
+      @if (inactiva()) {
+        <p class="mensaje mensaje-info" role="status">
+          Este registro está inactivo. Puedes corregir sus datos; seguirá inactivo.
+        </p>
+      }
+
+      <div class="campos">
+        <div class="campo">
+          <label for="tipoPersona">Tipo de persona <span class="obligatorio">*</span></label>
+          <select id="tipoPersona" formControlName="tipoPersona">
+            @for (t of tipos; track t) {
+              <option [ngValue]="t">{{ nombreTipo[t] }}</option>
+            }
+          </select>
+          @if (esDocente) {
+            <span class="ayuda">La plana docente registra personas de tipo Docente.</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="tipoDocumento">Tipo de documento <span class="obligatorio">*</span></label>
+          <select id="tipoDocumento" formControlName="tipoDocumento">
+            @for (t of tiposDocumento; track t) {
+              <option [ngValue]="t">{{ t }}</option>
+            }
+          </select>
+        </div>
+        <div class="campo">
+          <label for="numeroDocumento">Número de documento <span class="obligatorio">*</span></label>
+          <input id="numeroDocumento" type="text" inputmode="numeric" formControlName="numeroDocumento" maxlength="12" />
+          @if (mensajeValidacion('numeroDocumento'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="nombres">Nombres <span class="obligatorio">*</span></label>
+          <input id="nombres" type="text" formControlName="nombres" maxlength="120" />
+          @if (mensajeValidacion('nombres'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="apellidoPaterno">Apellido paterno <span class="obligatorio">*</span></label>
+          <input id="apellidoPaterno" type="text" formControlName="apellidoPaterno" maxlength="80" />
+          @if (mensajeValidacion('apellidoPaterno'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="apellidoMaterno">Apellido materno</label>
+          <input id="apellidoMaterno" type="text" formControlName="apellidoMaterno" maxlength="80" />
+          @if (mensajeValidacion('apellidoMaterno'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="email">Correo</label>
+          <input id="email" type="email" formControlName="email" maxlength="150" />
+          @if (mensajeValidacion('email'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="telefono">Teléfono</label>
+          <input id="telefono" type="tel" formControlName="telefono" maxlength="20" />
+          @if (mensajeValidacion('telefono'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="fechaNacimiento">Fecha de nacimiento</label>
+          <input id="fechaNacimiento" type="date" formControlName="fechaNacimiento" />
+          @if (mensajeValidacion('fechaNacimiento'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="campos">
+        <div class="campo">
+          <label for="direccion">Dirección</label>
+          <input id="direccion" type="text" formControlName="direccion" maxlength="255" />
+          @if (mensajeValidacion('direccion'); as m) {
+            <span class="error-campo">{{ m }}</span>
+          }
+        </div>
+        <div class="campo">
+          <label for="idEscuela">Escuela profesional</label>
+          <select id="idEscuela" formControlName="idEscuela">
+            <option [ngValue]="null">Sin escuela</option>
+            @for (e of escuelas(); track e.id) {
+              <option [ngValue]="e.id">{{ e.nombre }}</option>
+            }
+          </select>
+          <span class="ayuda">Un alumno necesita su escuela para matricularse en el plan de estudios.</span>
+        </div>
+      </div>
+    </div>
+    <footer class="acciones">
+      <button type="submit" class="boton boton-primario" [disabled]="loading() || errorCarga()">Guardar</button>
+      <a class="boton" [routerLink]="volverA">Cancelar</a>
+    </footer>
+  </form>
+</section>

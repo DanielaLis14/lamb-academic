@@ -1,0 +1,101 @@
+<section class="pagina">
+  <header class="encabezado-pagina">
+    <div>
+      <p class="migas">Gestión académica</p>
+      <h1>Plana docente</h1>
+      <p class="descripcion">
+        Docentes registrados en Base Universal y su carga lectiva por periodo, calculada de las secciones que dictan.
+      </p>
+    </div>
+    @if (auth.tieneRol(rolAdmin)) {
+      <a class="boton boton-primario" routerLink="/academico/docentes/nuevo">
+        <svg lucidePlus aria-hidden="true"></svg>
+        Nuevo docente
+      </a>
+    }
+  </header>
+
+  <form class="tarjeta" aria-label="Filtros de docentes" (ngSubmit)="cargar()">
+    <div class="cuerpo barra-filtros">
+      <div class="campo">
+        <label for="f-activo">Situación</label>
+        <select id="f-activo" name="activo" [(ngModel)]="activoFiltro" (ngModelChange)="cargar()">
+          <option [ngValue]="true">Activos</option>
+          <option [ngValue]="false">Inactivos</option>
+          <option [ngValue]="null">Todos</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-texto">Buscar</label>
+        <input id="f-texto" name="texto" type="search" placeholder="Nombre o documento" [(ngModel)]="texto" />
+      </div>
+      <button type="submit" class="boton">Buscar</button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="mensaje mensaje-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="tarjeta">
+    @if (loading()) {
+      <p class="estado-carga">Cargando docentes…</p>
+    } @else {
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Apellidos y nombres</th>
+              <th>Documento</th>
+              <th>Correo</th>
+              <th>Teléfono</th>
+              <th>Situación</th>
+              <th class="col-acciones"><span class="visualmente-oculto">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of docentes(); track d.id) {
+              <tr>
+                <td class="celda-principal">{{ d.nombreCompleto }}</td>
+                <td class="num">{{ d.tipoDocumento }} {{ d.numeroDocumento }}</td>
+                <td>{{ d.email ?? '—' }}</td>
+                <td>{{ d.telefono ?? '—' }}</td>
+                <td>
+                  <span class="etiqueta-estado" [class.estado-activo]="d.activo" [class.estado-neutro]="!d.activo">
+                    {{ d.activo ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="col-acciones">
+                  <a class="boton boton-texto boton-pequeno" [routerLink]="['/academico/docentes', d.id, 'carga']">
+                    <svg lucideCalendarCheck aria-hidden="true"></svg>
+                    Carga lectiva
+                  </a>
+                  @if (auth.tieneRol(rolAdmin)) {
+                    <a class="boton boton-texto boton-pequeno" [routerLink]="['/academico/docentes', d.id, 'editar']">
+                      <svg lucidePencil aria-hidden="true"></svg>
+                      Editar
+                    </a>
+                    @if (d.activo) {
+                      <button type="button" class="boton boton-texto boton-pequeno boton-peligro" (click)="desactivar(d)">
+                        <svg lucideUserX aria-hidden="true"></svg>
+                        Dar de baja
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            } @empty {
+              @if (!error()) {
+                <tr>
+                  <td colspan="6">
+                    <app-estado-vacio titulo="No hay docentes con esos filtros" descripcion="Cambia los filtros o la búsqueda." />
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>
