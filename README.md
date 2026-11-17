@@ -1,3 +1,13 @@
+> **Para el docente: módulo Base Universal (expedientes y documentos adjuntos), a cargo de Daniela Cóndor**
+>
+> - Backend: `backend/src/main/java/pe/edu/upeu/lambacademic/baseuniversal/expediente`
+>   (controller → service → repository → entity, con DTO y mapper)
+> - Frontend: `frontend/src/app/features/base-universal/expediente`
+> - Manejo de errores: `backend/src/main/java/pe/edu/upeu/lambacademic/exception/GlobalExceptionHandler.java`
+> - Base de datos: `infra/oracle/V2__integracion_modulos.sql` y `infra/oracle/V5__catalogos_expediente.sql`
+> - Guía con la ubicación exacta de cada parte: `docs/mapa-expedientes.md`
+
+
 # LAMB Academic
 
 Sistema académico universitario integrado. Un solo backend REST (Spring Boot 4 + Spring Modulith, Java 21) sobre
